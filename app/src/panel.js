@@ -21,7 +21,12 @@ export class Panel {
     this.el.inert = true;
     this.el.innerHTML = `
       <button class="pClose" aria-label="Close">×</button>
-      <div class="pPhoto"><img alt="" decoding="async"><i class="pCross"></i><span class="pNote"></span></div>
+      <div class="pPhoto" data-state="idle" aria-busy="false">
+        <img alt="" decoding="async">
+        <i class="pCross"></i>
+        <div class="pPhotoState" role="status" aria-live="polite"><i></i><span></span></div>
+        <span class="pNote"></span>
+      </div>
       <h2 class="pTitle"></h2>
       <div class="pClass"></div>
       <dl class="pNums"></dl>
@@ -33,10 +38,12 @@ export class Panel {
         <p class="pSpecWhy">The labeled fingerprints arrive stretched by ×(1 + z). That shift is what gives this point its depth.</p>
       </div>
       <div class="pActions">
-        <button class="pLocate">locate on the photographed sky</button>
+        <button class="pLocate">zoom to this object in the photograph</button>
         <a class="pLink" target="_blank" rel="noopener">official survey viewer ↗</a>
       </div>`;
+    this.photo = el.querySelector('.pPhoto');
     this.img = el.querySelector('.pPhoto img');
+    this.photoState = el.querySelector('.pPhotoState span');
     this.cross = el.querySelector('.pCross');
     this.note = el.querySelector('.pNote');
     this.title = el.querySelector('.pTitle');
@@ -53,12 +60,16 @@ export class Panel {
     el.querySelector('.pClose').addEventListener('click', () => this.close());
     this.locate.addEventListener('click', () => { if (this.onLocate && this.sel) this.onLocate(this.sel); });
     this.token = 0;
+    this.photoUrl = null;
     this.onClose = null;
     this.onLocate = null;
   }
 
   close() {
     this.token++;
+    this.img.onload = this.img.onerror = null;
+    if (this.photoUrl) URL.revokeObjectURL(this.photoUrl);
+    this.photoUrl = null;
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
     this.el.inert = true;
@@ -134,15 +145,53 @@ export class Panel {
   // ------------------------------------------------------------- photo
 
   async _photo(sel, me) {
+    // An <img> with its src removed can paint the browser's broken-image glyph.
+    // Keep it visually hidden until decoding succeeds and put an explicit state
+    // layer above it instead. Also release an object URL if selection changes
+    // before the previous image reaches onload.
+    this.img.onload = this.img.onerror = null;
+    if (this.photoUrl) URL.revokeObjectURL(this.photoUrl);
+    this.photoUrl = null;
     this.img.removeAttribute('src');
-    this.note.textContent = 'loading photo…';
+    this.photo.dataset.state = 'loading';
+    this.photo.setAttribute('aria-busy', 'true');
+    this.photoState.textContent = 'Loading telescope image…';
+    this.note.textContent = '';
+
     const px = 256, fov = (px * 0.262) / 3600;         // 0.262″/px — DECam native
     const got = await fetchCutout(sel.ra, sel.dec, fov, px);
     if (me !== this.token) { if (got) URL.revokeObjectURL(got.url); return; }
-    if (!got) { this.note.textContent = 'no imagery here'; return; }
-    this.img.onload = () => URL.revokeObjectURL(got.url);
-    this.img.src = got.url;
-    this.note.textContent = got.source;
+    if (!got) {
+      this.photo.dataset.state = 'error';
+      this.photo.setAttribute('aria-busy', 'false');
+      this.photoState.textContent = 'No survey image is available here';
+      return;
+    }
+
+    const url = got.url;
+    this.photoUrl = url;
+    const ready = () => {
+      if (me !== this.token || this.photoUrl !== url) return;
+      this.img.onload = this.img.onerror = null;
+      this.photoUrl = null;
+      URL.revokeObjectURL(url);
+      this.photo.dataset.state = 'ready';
+      this.photo.setAttribute('aria-busy', 'false');
+      this.photoState.textContent = '';
+      this.note.textContent = got.source;
+    };
+    this.img.onload = ready;
+    this.img.onerror = () => {
+      if (me !== this.token || this.photoUrl !== url) return;
+      this.img.onload = this.img.onerror = null;
+      this.photoUrl = null;
+      URL.revokeObjectURL(url);
+      this.photo.dataset.state = 'error';
+      this.photo.setAttribute('aria-busy', 'false');
+      this.photoState.textContent = 'Telescope image could not be displayed';
+    };
+    this.img.src = url;
+    if (this.img.complete && this.img.naturalWidth) ready();
   }
 
   // ------------------------------------------------------------ spectrum

@@ -122,7 +122,7 @@ Toggling back to Photo from any stage animates the full reverse. `prefers-reduce
 One `THREE.Points` + custom ShaderMaterial per chunk file (interleaved or separate attribute buffers built in a Worker from the raw ArrayBuffer). Uniform `u` drives the §6.1 mix in the **vertex shader** (both `dir*R_SKY` and true xyz derivable from the xyz attribute alone). Color by layer (palette §8) with subtle depth modulation; size attenuation with clamped px size; additive blending, depthWrite off. Chunk streaming: load near shells first, then background-load the rest; a HUD counter shows points loaded. Stars layer: see §6.4.
 
 ### 6.3 Imagery
-- Base: `sky_base.jpg` mapped on the inside of the sky sphere (CAR → equirect UV; note RA runs east-left: flip U so RA increases leftward, and verify against a known constellation/Coma position).
+- Base: `sky_base.jpg` mapped on the inside of the sky sphere (CAR → equirect UV; note RA runs east-left: flip U so RA increases leftward, and verify against a known constellation/Coma position). Use `sky_base_low.jpg` when the GPU's maximum texture dimension is below 8192 px.
 - Detail: below 5.5°, fetch `jpeg-cutout` for a tangent quad; stop at DECam's honest native 0.262″/px, then enlarge measured pixels. Detect blank frames by luminance variation, not byte size alone, and fall back to DSS2. LRU is 14 textures on desktop and 5 on mobile. Show a small "imagery: Legacy Surveys DR11" / "DSS2 (outside DR11 footprint)" source line.
 - "Photo" toggle chip hides/shows sphere + quads (dots remain).
 
@@ -130,13 +130,13 @@ One `THREE.Points` + custom ShaderMaterial per chunk file (interleaved or separa
 Stars (parsecs) live in a second scene rendered with its own camera whose distances are pc-scaled; crossfade: cosmic camera distance < 40 Mpc from origin → stars fade in as a local ball; > 40 Mpc → fade out. Stars are not clickable. Simple is fine; it just needs to make "home" feel inhabited.
 
 ### 6.5 Picking + panel
-GPU-pick DESI, both nearby layers, and Milliquas (not stars). Hover = class/ID; click opens the right-side evidence panel:
-- Photo: jpeg-cutout 256 px at the point's ra/dec (derive ra/dec from xyz), with blank-detection fallback; crosshair overlay for QSOs.
+GPU-pick DESI, both nearby layers, and Milliquas (not stars). Hover = class/ID; click marks the exact object in the main map and opens the right-side evidence panel:
+- Photo: jpeg-cutout 256 px at the point's ra/dec (derive ra/dec from xyz), with blank-detection fallback; explicit loading/error states (never a broken-image glyph); crosshair overlay for QSOs.
 - Numbers: z (as measured), D_C, lookback (manifest tables), RA/Dec, layer/class, plain-language line ("Light left this galaxy X ago").
 - Spectrum (DESI layers only): SPARCL find(specid=targetid string) → retrieve flux+model → plot on a canvas: flux (starlight, thin), model (brass), dashed vertical lines at (1+z)·λ_rest labeled from this list — galaxies em: [O II] 3728.5, Hβ 4862.7, [O III] 5008.2, Hα 6564.6, [S II] 6725; abs: Ca K 3934.8, Ca H 3969.6, G 4305.6, Mg b 5176.7, Na D 5893; QSO: Ly α 1215.67, Si IV 1399.8, C IV 1549.5, C III] 1908.7, Mg II 2799.1 (vacuum Å). Smooth flux with a 3-px boxcar. Loading state; graceful failure ("spectrum unavailable").
 - Link: `https://www.legacysurvey.org/viewer?ra=&dec=&layer=ls-dr11&zoom=13`.
 - `local_cf4`: use the rendered indicator distance and explicitly call it redshift-independent. `local_2mrs`: call the distance redshift-derived. Never conflate the two.
-- A local “locate on the photographed sky” action returns to this RA/Dec and activates the time lens at the object's lookback time.
+- A local “zoom to this object in the photograph” action returns to this RA/Dec at a 0.08° (4.8′) field, keeps the target marked, and activates the time lens at the object's lookback time.
 
 ### 6.6 HUD (mockup v2 is the design reference — near-monochrome, brass accent, IBM Plex Mono for readouts, Spectral for the wordmark; system fallbacks, `font-display: swap`)
 Top-left wordmark "Lightcone" + sub "every dot is a real measurement". Top-right: layer chips (Stars/Nearby/Cosmic web/Quasars) + "photo" chip. Bottom-center: mode segmented control [Photo·2D | Depth·3D] + Home. Bottom-left readout: mode-dependent (2D: RA/Dec + FOV; 3D: distance from home + z at camera). Bottom-right: points loaded + fps. One fading hint line on first load. URL hash tracks state (`#ra,dec,fov,u,…`) — every view is a permalink. No other chrome.

@@ -16,10 +16,12 @@ Nothing is simulated.
 
 - **Time lens** isolates objects whose light left during the same era. It is a
   redshift focus plane on the photograph and a radial cross-section in 3D.
-- Click a galaxy or quasar for its real survey image and measured distance.
-  DESI targets also load their actual spectrum from NOIRLab SPARCL.
-- **Locate on the photographed sky** closes the loop from a 3D point back to
-  its telescope pixels and highlights neighbors at the same cosmic time.
+- Click a galaxy or quasar to mark it on the main map and inspect its real
+  survey image and measured distance. DESI targets also load their actual
+  spectrum from NOIRLab SPARCL.
+- **Zoom to this object in the photograph** closes the loop from a 3D point
+  back to a 4.8′ telescope field and highlights neighbors at the same cosmic
+  time.
 - **Tour** visits Coma, the Sloan Great Wall, the Boötes Void, and deep quasars.
 - Phones automatically use an 848k-point LOD, a smaller sky plate, bounded
   texture caching, and lower GPU resolution. Add `?quality=full` to override.

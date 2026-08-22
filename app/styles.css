@@ -142,6 +142,27 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 1px solid 
   transform: translate(14px, 14px); white-space: nowrap; border-radius: 2px;
 }
 
+/* ---------------------------------------------------------- selected object */
+
+#hud > .selectionMark {
+  position: absolute; left: 0; top: 0; width: 28px; height: 28px;
+  transform: translate(-50%, -50%); pointer-events: none;
+  color: var(--gold); filter: drop-shadow(0 0 5px rgba(5,7,11,.95));
+}
+.selectionMark > span { position: absolute; inset: 0; border: 1px solid var(--gold); border-radius: 50%; }
+.selectionMark > span::before, .selectionMark > span::after {
+  content: ""; position: absolute; left: 50%; top: 50%; background: var(--gold); transform: translate(-50%, -50%);
+}
+.selectionMark > span::before { width: 38px; height: 1px; }
+.selectionMark > span::after { width: 1px; height: 38px; }
+.selectionMark b {
+  position: absolute; left: 23px; top: 34px; padding: 3px 5px;
+  color: var(--gold); background: rgba(5,7,11,.86); border: 1px solid rgba(217,168,78,.28);
+  font: 500 9px/1.2 var(--mono); font-weight: 500; letter-spacing: .06em; white-space: nowrap;
+}
+.selectionMark.ping > span { animation: targetPing .55s ease-out; }
+@keyframes targetPing { from { transform: scale(.55); opacity: .25; } to { transform: scale(1); opacity: 1; } }
+
 /* ------------------------------------------------------------------ tour */
 
 .tour {
@@ -178,8 +199,27 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 1px solid 
    numbers and the spectrum above the fold on a laptop */
 .pPhoto { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #04060A;
   border: 1px solid var(--line); overflow: hidden; }
-.pPhoto img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pCross { position: absolute; inset: 0; display: none; }
+.pPhoto img {
+  width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0;
+  transition: opacity .18s ease;
+}
+.pPhoto[data-state="ready"] img { opacity: 1; }
+.pPhotoState {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 9px; padding: 20px;
+  color: var(--dim); background: #04060A; text-align: center;
+  font: 10px/1.5 var(--mono); letter-spacing: .05em;
+}
+.pPhoto[data-state="ready"] .pPhotoState { display: none; }
+.pPhotoState > i {
+  width: 18px; height: 18px; border: 1px solid #263246; border-top-color: var(--gold);
+  border-radius: 50%; animation: photoSpin .8s linear infinite;
+}
+.pPhoto[data-state="error"] .pPhotoState > i,
+.pPhoto[data-state="idle"] .pPhotoState > i { display: none; }
+@keyframes photoSpin { to { transform: rotate(360deg); } }
+.pCross { position: absolute; inset: 0; display: none; opacity: 1; transition: opacity .18s ease; }
+.pPhoto:not([data-state="ready"]) .pCross { opacity: 0; }
 .pCross::before, .pCross::after {
   content: ""; position: absolute; background: rgba(217, 168, 78, .8);
 }
@@ -187,7 +227,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 1px solid 
 .pCross::after { top: 50%; left: 12%; height: 1px; width: 24%; transform: translateY(-.5px); }
 .pNote { position: absolute; left: 0; bottom: 0; right: 0; font-family: var(--mono);
   font-size: 9px; color: var(--dim); background: linear-gradient(transparent, rgba(5,7,11,.9));
-  padding: 14px 6px 4px; letter-spacing: .05em; }
+  padding: 14px 6px 4px; letter-spacing: .05em; pointer-events: none; }
 
 .pTitle { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text);
   margin: 14px 0 2px; letter-spacing: .04em; word-break: break-all; }
@@ -257,5 +297,6 @@ html.reduced *, html.reduced *::before, html.reduced *::after {
   .epochNow, .epochOld { display: none; }
   #epochOut { min-width: 120px; font-size: 9px; }
   #panel { width: 100vw; padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
+  .selectionMark b { left: 50%; top: 34px; transform: translateX(-50%); }
   .pCanvas { height: 150px; }
 }

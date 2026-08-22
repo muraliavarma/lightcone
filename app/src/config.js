@@ -36,6 +36,9 @@ export const BLANK_BYTES = 2500;       // §2 — out-of-footprint jpeg is ~1652
 export const HOME_RA = 194.9;
 export const HOME_DEC = 28.0;
 export const HOME_FOV = 7.0;
+// A selected object needs enough surrounding sky to retain context, but 0.35°
+// made even a large nearby galaxy almost disappear. This is 4.8 arcminutes.
+export const LOCATE_FOV = 0.08;
 export const LENS_HALF_GYR = 0.45;
 export const STAR_FADE_MPC = 40;       // §6.4 crossfade distance
 export const STAR_BALL_PC = 600;       // scene radius the star ball occupies

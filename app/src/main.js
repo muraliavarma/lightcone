@@ -4,16 +4,16 @@
 import * as THREE from '../vendor/three/three.module.js';
 import {
   STAGE, LAYERS, GROUPS, REDUCED_MOTION, FOV_PHOTO_START,
-  DPR_MAX, LOW_POWER, QUALITY, LENS_HALF_GYR
-} from './config.js';
+  DPR_MAX, LOW_POWER, QUALITY, LENS_HALF_GYR, R_SKY, LOCATE_FOV
+} from './config.js?v=3';
 import { loadManifest, ChunkStream } from './loader.js';
 import { initCosmo, xyzToRaDec, zOfTlb, dcOfZ, tlbOfZ, zOfDc } from './cosmo.js';
 import { PointField } from './points.js';
 import { StarField } from './stars.js';
-import { Sky } from './sky.js';
+import { Sky } from './sky.js?v=3';
 import { CameraRig } from './camera.js';
 import { Picker } from './pick.js';
-import { Panel } from './panel.js';
+import { Panel } from './panel.js?v=3';
 import { Hud } from './hud.js';
 import { Tour } from './tour.js';
 import { readHash, writeHash } from './urlstate.js';
@@ -92,7 +92,11 @@ const panel = new Panel(document.getElementById('panel'));
 let sky = null, tour = null, hud = null, stream = null;
 
 const _v = new THREE.Vector3();
+const _markPos = new THREE.Vector3();
+const selectionMark = document.getElementById('selectionMark');
+const selectionLabel = document.getElementById('selectionLabel');
 const pointer = { x: 0, y: 0, on: false, moved: false };
+let selected = null, markX = NaN, markY = NaN;
 let hoverKey = '', lastPick = 0, lastHash = 0;
 
 // ---------------------------------------------------------------- selection
@@ -105,15 +109,57 @@ function selectAt(cx, cy) {
   const x = c.pos[i * 3], y = c.pos[i * 3 + 1], z = c.pos[i * 3 + 2];
   const rd = xyzToRaDec(x, y, z);
   return {
-    chunk: hit.chunk, index: i, layer: c.layer,
+    chunk: hit.chunk, index: i, layer: c.layer, px: x, py: y, pz: z,
     ra: rd.ra, dec: rd.dec, z: c.sec[i], distance: Math.hypot(x, y, z),
     // §2a: TARGETID is int64 > 2^53 — it never becomes a Number
     tidStr: c.tid ? c.tid[i].toString() : null
   };
 }
 
+function setSelected(sel) {
+  selected = sel || null;
+  selectionMark.hidden = true;       // projection reveals it on the next frame
+  markX = markY = NaN;
+  if (!selected) return;
+  selectionLabel.textContent = `selected ${String(LAYERS[selected.layer]?.label || 'object').toLowerCase()}`;
+  selectionMark.classList.remove('ping');
+  // Restart the restrained acquisition pulse when a different point is picked.
+  void selectionMark.offsetWidth;
+  selectionMark.classList.add('ping');
+}
+
+function updateSelectionMark() {
+  if (!selected) return;
+  let { px: x, py: y, pz: z } = selected;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+    const r = selected.distance || dcOfZ(selected.z);
+    const ra = selected.ra * Math.PI / 180, dec = selected.dec * Math.PI / 180;
+    const cd = Math.cos(dec);
+    x = r * cd * Math.cos(ra); y = r * cd * Math.sin(ra); z = r * Math.sin(dec);
+  }
+  const d = Math.hypot(x, y, z);
+  if (!(d > 0)) { selectionMark.hidden = true; return; }
+  // Match the point shader exactly: sky-sphere position in 2D, measured xyz in 3D.
+  const scale = (1 - rig.st.u) * R_SKY / d + rig.st.u;
+  _markPos.set(x * scale, y * scale, z * scale).project(rig.camera);
+  const visible = _markPos.z >= -1 && _markPos.z <= 1 &&
+    Math.abs(_markPos.x) <= 1.03 && Math.abs(_markPos.y) <= 1.03;
+  const hide = !visible;
+  if (selectionMark.hidden !== hide) selectionMark.hidden = hide;
+  if (!visible) return;
+  const sx = (_markPos.x * 0.5 + 0.5) * W;
+  const sy = (0.5 - _markPos.y * 0.5) * H;
+  if (!Number.isFinite(markX) || Math.abs(sx - markX) > 0.05) {
+    markX = sx; selectionMark.style.left = `${sx}px`;
+  }
+  if (!Number.isFinite(markY) || Math.abs(sy - markY) > 0.05) {
+    markY = sy; selectionMark.style.top = `${sy}px`;
+  }
+}
+
 function openSelection(sel) {
   if (!sel) { panel.close(); return; }
+  setSelected(sel);
   panel.open(sel);
   document.getElementById('hud').classList.add('panelopen');
 }
@@ -162,7 +208,7 @@ function applyHash(h) {
 async function boot() {
   const manifest = await loadManifest();
   initCosmo(manifest);
-  sky = new Sky(field.scene, manifest.__root);
+  sky = new Sky(field.scene, manifest.__root, renderer.capabilities.maxTextureSize);
 
   hud = new Hud({
     onGroup: (g, on) => {
@@ -171,20 +217,25 @@ async function boot() {
     },
     onPhoto: (on) => { sky.setEnabled(on); queueHash(); },
     onMode: (m) => { m ? rig.unfold() : rig.home(); if (tour) tour.stop(); },
-    onHome: () => { panel.close(); rig.home(); if (tour) tour.stop(); },
+    onHome: () => { panel.close(); setSelected(null); rig.home(); if (tour) tour.stop(); },
     onFree: () => rig.release(),
     onLens: (on, lookback) => setLens(on, lookback, false),
     onTour: () => tour && tour.toggle()
   });
   sky.onSource = (s) => hud.setSource(s);
-  panel.onClose = () => { hoverKey = ''; document.getElementById('hud').classList.remove('panelopen'); };
+  panel.onClose = () => {
+    hoverKey = '';
+    setSelected(null);
+    document.getElementById('hud').classList.remove('panelopen');
+  };
   panel.onLocate = (sel) => {
     panel.close();
+    setSelected(sel);
     sky.setEnabled(true);
     hud.setPhotoChip(true);
     const t = tlbOfZ(zOfDc(sel.distance));
     setLens(true, t, true);
-    rig.showSky(sel.ra, sel.dec, 0.35);
+    rig.showSky(sel.ra, sel.dec, LOCATE_FOV);
     hud.dismissHint();
   };
 
@@ -301,6 +352,7 @@ function loop(now) {
   }
 
   rig.update(now);
+  updateSelectionMark();
 
   const u = rig.st.u;
   const atten = rig.atten(H);

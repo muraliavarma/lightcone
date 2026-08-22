@@ -45,8 +45,9 @@ void main() {
 }`;
 
 export class Sky {
-  constructor(scene, root) {
+  constructor(scene, root, maxTextureSize = 4096) {
     this.root = root;
+    this.maxTextureSize = maxTextureSize;
     this.enabled = true;
     this.source = '';
     this.onSource = null;
@@ -97,8 +98,12 @@ export class Sky {
   }
 
   _loadBase() {
+    // WebGL only guarantees relatively small textures. Some otherwise capable
+    // desktops expose a 4096 px limit, so uploading the 8192 px plate leaves a
+    // black background while ordinary HTML thumbnails still work.
+    const low = LOW_POWER || this.maxTextureSize < 8192;
     new THREE.TextureLoader().load(
-      `${this.root}/${LOW_POWER ? 'sky_base_low.jpg' : 'sky_base.jpg'}`,
+      `${this.root}/${low ? 'sky_base_low.jpg' : 'sky_base.jpg'}`,
       (t) => {
         t.colorSpace = THREE.SRGBColorSpace;
         t.generateMipmaps = false;                  // avoids a seam at RA 180

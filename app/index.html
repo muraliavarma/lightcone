@@ -14,7 +14,7 @@
 <meta property="og:image" content="https://lightcone.murlax.com/data/home_coma_dr11.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='5' fill='%23D9A84E'/%3E%3Cpath d='M32 3 11 57h42z' fill='none' stroke='%23E9E4D8' stroke-width='3'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 
@@ -73,11 +73,15 @@
 
   <div class="tip" id="tip" hidden></div>
 
+  <div class="selectionMark" id="selectionMark" hidden aria-hidden="true">
+    <span></span><b id="selectionLabel"></b>
+  </div>
+
   <aside id="panel" aria-hidden="true" aria-label="Object details" tabindex="-1"></aside>
 
   <div class="boot" id="boot" role="status" aria-live="polite"><span>reading the sky…</span></div>
 </div>
 
-<script type="module" src="src/main.js"></script>
+<script type="module" src="src/main.js?v=3"></script>
 </body>
 </html>

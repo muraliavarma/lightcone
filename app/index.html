@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lightcone — every dot is a real galaxy</title>
+<meta name="description" content="The real sky, unfolded into the three-dimensional cosmic web: 2.5 million measured galaxy redshifts from DESI DR1 over Legacy Surveys DR11 imagery.">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400&family=Spectral:wght@300;400&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+
+<div id="hud">
+
+  <header class="tl">
+    <h1>Lightcone</h1>
+    <p>every dot is a real galaxy</p>
+  </header>
+
+  <nav class="tr" aria-label="Layers">
+    <button class="chip" data-group="stars"  aria-pressed="true"><i style="--c:#F2EFE7"></i>Stars</button>
+    <button class="chip" data-group="nearby" aria-pressed="true"><i style="--c:#CFC9BC"></i>Nearby</button>
+    <button class="chip" data-group="web"    aria-pressed="true"><i style="--c:#E5C078"></i>Cosmic web</button>
+    <button class="chip" data-group="qso"    aria-pressed="true"><i style="--c:#A78BDB"></i>Quasars</button>
+    <span class="gap"></span>
+    <button class="chip" id="chipPhoto" aria-pressed="true">photo</button>
+    <button class="chip" id="chipTour">tour</button>
+  </nav>
+
+  <div class="bc">
+    <div class="seg" role="group" aria-label="Mode">
+      <button id="mPhoto" class="on">Photo · 2D</button>
+      <button id="mDepth">Depth · 3D</button>
+    </div>
+    <button class="chip" id="btnHome">Home</button>
+    <button class="chip hidden" id="btnFree">release camera</button>
+  </div>
+
+  <div class="bl" id="readout"></div>
+  <div class="br"><span id="rPoints">0</span> points<span class="sep">·</span><span id="rFps">--</span> fps</div>
+
+  <div class="src" id="imgSrc"></div>
+  <div class="hint" id="hint">drag to look around · scroll to zoom · press <b>Depth · 3D</b> to unfold the sky</div>
+  <div class="credit">Real data: DESI × Legacy Surveys × Gaia × Cosmicflows · credits in README</div>
+
+  <div class="tour" id="tourCard" hidden>
+    <div class="tHead"><span id="tStep"></span><button class="x" id="tExit" aria-label="Exit tour">×</button></div>
+    <h2 id="tTitle"></h2>
+    <p id="tText"></p>
+    <div class="tNav"><button class="chip" id="tPrev">← back</button><button class="chip gold" id="tNext">next →</button></div>
+  </div>
+
+  <div class="tip" id="tip" hidden></div>
+
+  <aside id="panel" aria-hidden="true" aria-label="Object details"></aside>
+
+  <div class="boot" id="boot"><span>reading the sky…</span></div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

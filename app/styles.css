@@ -1,0 +1,209 @@
+/* Lightcone — visual tokens §8. Dark only, explicit backgrounds, brass reserved
+   for things you can act on. No chrome beyond what §6.6 asks for. */
+
+:root {
+  --panelw: min(348px, 90vw);
+  --void: #05070B;
+  --surface: #0C111A;
+  --line: #1B2433;
+  --text: #E9E4D8;
+  --dim: #7E8AA0;
+  --gold: #D9A84E;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --serif: "Spectral", Georgia, "Times New Roman", serif;
+  --pad: 18px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--void); color: var(--text);
+  font-family: var(--sans); font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+#stage.grabbing { cursor: grabbing; }
+#stage.over { cursor: pointer; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: auto; }
+
+/* ---------------------------------------------------------------- corners */
+
+.tl { position: absolute; top: var(--pad); left: var(--pad); pointer-events: none; }
+.tl h1 {
+  font-family: var(--serif); font-weight: 300; font-size: 27px;
+  letter-spacing: .055em; margin: 0; line-height: 1;
+}
+.tl p { margin: 5px 0 0; font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .1em; }
+
+.tr {
+  position: absolute; top: var(--pad); right: var(--pad);
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end;
+  max-width: 62vw;
+}
+.tr .gap { width: 10px; }
+
+.bc {
+  position: absolute; bottom: var(--pad); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center;
+}
+
+.bl, .br, .src, .credit {
+  position: absolute; font-family: var(--mono); font-size: 10.5px;
+  color: var(--dim); letter-spacing: .045em; line-height: 1.65;
+  white-space: pre; pointer-events: none;
+}
+.bl { bottom: var(--pad); left: var(--pad); }
+.br { bottom: var(--pad); right: var(--pad); text-align: right; }
+.br .sep { margin: 0 7px; opacity: .45; }
+.src { top: 62px; right: var(--pad); font-size: 10px; opacity: .8; text-align: right; }
+.credit { bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 9px; opacity: .38; }
+
+.hint {
+  position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 10.5px; color: var(--dim);
+  letter-spacing: .06em; pointer-events: none;
+  transition: opacity 1.1s ease; white-space: nowrap;
+}
+.hint b { color: var(--gold); font-weight: 500; }
+.hint.gone { opacity: 0; }
+
+/* ------------------------------------------------------------------ chips */
+
+.chip {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .07em;
+  color: var(--dim); background: rgba(12, 17, 26, .72);
+  border: 1px solid var(--line); border-radius: 2px;
+  padding: 5px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); transition: color .16s, border-color .16s, background .16s;
+}
+.chip:hover { color: var(--text); border-color: #2A3648; }
+.chip[aria-pressed="true"] { color: var(--text); }
+.chip[aria-pressed="false"] { opacity: .48; }
+.chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); display: block; }
+.chip[aria-pressed="false"] i { background: #39445A; }
+.chip.gold { color: var(--gold); border-color: rgba(217, 168, 78, .42); }
+.chip.hidden { display: none; }
+#chipTour { color: var(--gold); border-color: rgba(217, 168, 78, .3); }
+
+.seg {
+  display: flex; border: 1px solid var(--line); border-radius: 2px;
+  background: rgba(12, 17, 26, .72); -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); overflow: hidden;
+}
+.seg button {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .08em;
+  background: none; border: 0; color: var(--dim); padding: 7px 15px; cursor: pointer;
+  border-bottom: 1px solid transparent; transition: color .16s, border-color .16s;
+}
+.seg button:hover { color: var(--text); }
+.seg button.on { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* ------------------------------------------------------------------- tip */
+
+.tip {
+  position: absolute; font-family: var(--mono); font-size: 10px; color: var(--text);
+  background: rgba(5, 7, 11, .88); border: 1px solid var(--line);
+  padding: 4px 7px; pointer-events: none; letter-spacing: .05em;
+  transform: translate(14px, 14px); white-space: nowrap; border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------ tour */
+
+.tour {
+  position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%);
+  width: min(540px, calc(100vw - 36px));
+  background: rgba(12, 17, 26, .93); border: 1px solid var(--line);
+  padding: 16px 18px 14px; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); border-radius: 2px;
+}
+.tour .tHead { display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .12em; }
+.tour .x { background: none; border: 0; color: var(--dim); font-size: 17px; cursor: pointer; line-height: 1; }
+.tour .x:hover { color: var(--text); }
+.tour h2 { font-family: var(--serif); font-weight: 400; font-size: 21px; margin: 8px 0 6px; letter-spacing: .01em; }
+.tour p { margin: 0 0 12px; font-size: 13px; line-height: 1.62; color: #C6C0B4; }
+.tour .tNav { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ----------------------------------------------------------------- panel */
+
+#panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: var(--panelw);
+  background: rgba(12, 17, 26, .96); border-left: 1px solid var(--line);
+  padding: 16px 18px 26px; overflow-y: auto; overflow-x: hidden;
+  transform: translateX(102%); transition: transform .26s cubic-bezier(.22,.61,.36,1);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+#panel.open { transform: none; }
+@media (prefers-reduced-motion: reduce) { #panel { transition: none; } }
+
+.pClose { position: absolute; top: 10px; right: 12px; background: none; border: 0;
+  color: var(--dim); font-size: 20px; cursor: pointer; line-height: 1; }
+.pClose:hover { color: var(--text); }
+
+/* the cutout is square; showing it 4:3 keeps the object centred and leaves the
+   numbers and the spectrum above the fold on a laptop */
+.pPhoto { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #04060A;
+  border: 1px solid var(--line); overflow: hidden; }
+.pPhoto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pCross { position: absolute; inset: 0; display: none; }
+.pCross::before, .pCross::after {
+  content: ""; position: absolute; background: rgba(217, 168, 78, .8);
+}
+.pCross::before { left: 50%; top: 12%; width: 1px; height: 24%; transform: translateX(-.5px); }
+.pCross::after { top: 50%; left: 12%; height: 1px; width: 24%; transform: translateY(-.5px); }
+.pNote { position: absolute; left: 0; bottom: 0; right: 0; font-family: var(--mono);
+  font-size: 9px; color: var(--dim); background: linear-gradient(transparent, rgba(5,7,11,.9));
+  padding: 14px 6px 4px; letter-spacing: .05em; }
+
+.pTitle { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text);
+  margin: 14px 0 2px; letter-spacing: .04em; word-break: break-all; }
+.pClass { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .08em; margin-bottom: 12px; }
+
+.pNums { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0 0 12px;
+  font-family: var(--mono); font-size: 10.5px; }
+.pNums dt { color: var(--dim); letter-spacing: .05em; }
+.pNums dd { margin: 0; color: var(--text); text-align: right; }
+
+.pPlain { font-size: 12.5px; line-height: 1.6; color: #B9B4A8; margin: 0 0 16px;
+  border-left: 1px solid var(--line); padding-left: 10px; }
+
+.pSpec { margin-bottom: 14px; }
+.pSpecHead { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono);
+  font-size: 9px; color: var(--dim); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px; }
+.pSpecSrc { text-transform: none; letter-spacing: .04em; opacity: .8; text-align: right; }
+.pCanvas { width: 100%; height: 182px; display: block; }
+.pSpecMsg { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .05em; min-height: 14px; }
+
+.pLink { font-family: var(--mono); font-size: 10px; color: var(--gold); letter-spacing: .06em;
+  text-decoration: none; border-bottom: 1px solid rgba(217,168,78,.3); }
+.pLink:hover { border-bottom-color: var(--gold); }
+
+/* the panel must never sit on top of the layer chips or the counters */
+.tr, .br, .src { transition: transform .26s cubic-bezier(.22,.61,.36,1); }
+#hud.panelopen .tr, #hud.panelopen .br, #hud.panelopen .src {
+  transform: translateX(calc(-1 * var(--panelw) - 6px));
+}
+@media (prefers-reduced-motion: reduce) { .tr, .br, .src { transition: none; } }
+
+/* §6.1 — reduced motion gets jump cuts everywhere, not just in the camera */
+html.reduced *, html.reduced *::before, html.reduced *::after {
+  transition-duration: 0s !important; animation-duration: 0s !important;
+}
+
+/* ------------------------------------------------------------------ boot */
+
+.boot { position: absolute; inset: 0; display: grid; place-items: center;
+  background: var(--void); font-family: var(--mono); font-size: 11px; color: var(--dim);
+  letter-spacing: .18em; transition: opacity .5s ease; }
+.boot.gone { opacity: 0; pointer-events: none; }
+
+@media (max-width: 720px) {
+  :root { --pad: 12px; }
+  .tl h1 { font-size: 21px; }
+  .tr { max-width: 70vw; }
+  .credit { display: none; }
+}

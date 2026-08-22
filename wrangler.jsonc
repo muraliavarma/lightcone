@@ -2,6 +2,7 @@
   // Lightcone — assets-only Worker: static files, no server code.
   "name": "lightcone",
   "compatibility_date": "2026-08-01",
+  "workers_dev": true,
   "routes": [
     { "pattern": "lightcone.murlax.com", "custom_domain": true }
   ],

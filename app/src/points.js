@@ -15,8 +15,10 @@ const UNFOLD = /* glsl */`
 const VERT = /* glsl */`
 uniform float uMix, uRSky, uAtten, uDpr, uSize, uMinPx, uMaxPx, uMaxPx3;
 uniform float uOpacity, uOpacity3, uFadeRef, uNearRef, uGain3, uRing, uFocusR;
+uniform vec2 uCursor;
 uniform vec3 uColor, uFocus;
 varying vec4 vCol;
+varying float vRing;
 void main() {
 ${UNFOLD}
   vec4 mv = modelViewMatrix * vec4(unfolded, 1.0);
@@ -24,8 +26,14 @@ ${UNFOLD}
   float dist = max(-mv.z, 1.0);
   // over a live photograph the dots become open rings (§6.3) — a galaxy has to
   // be distinguishable from the thousand foreground stars in the same frame, and
-  // a filled dot is not. Rings need room, so they get a size boost.
-  float boost = 1.0 + 0.75 * uRing;
+  // a filled dot is not. But a thousand rings bury the photograph, so they only
+  // come up in a soft spotlight around the cursor: the photo reads as a
+  // photograph, and the affordance appears where you are actually pointing.
+  vec2 ndc = gl_Position.xy / max(gl_Position.w, 1e-6);
+  float ringF = uRing * smoothstep(0.60, 0.18, distance(ndc, uCursor));
+  vRing = ringF;
+  // Rings need room, so they get a size boost.
+  float boost = 1.0 + 0.75 * ringF;
   gl_PointSize = clamp(uSize * boost * uAtten / dist,
                        uMinPx, mix(uMaxPx, uMaxPx3, uMix) * boost) * uDpr;
   // Depth modulation, one cue per stage. On the sky sphere every point is the
@@ -50,8 +58,8 @@ ${UNFOLD}
 
 const FRAG = /* glsl */`
 precision mediump float;
-uniform highp float uRing;   // must match the vertex stage's default precision
 varying vec4 vCol;
+varying highp float vRing;   // must match the vertex stage's default precision
 void main() {
   vec2 c = gl_PointCoord - 0.5;
   float r2 = dot(c, c);
@@ -59,7 +67,7 @@ void main() {
   float disc = smoothstep(0.25, 0.03, r2);
   float r = sqrt(r2) * 2.0;
   float ring = smoothstep(0.50, 0.72, r) * smoothstep(1.0, 0.82, r);
-  gl_FragColor = vec4(vCol.rgb, vCol.a * mix(disc, ring, uRing));
+  gl_FragColor = vec4(vCol.rgb, vCol.a * mix(disc, ring, vRing));
 }`;
 
 const PICK_VERT = /* glsl */`
@@ -100,6 +108,7 @@ export class PointField {
       uNearRef: { value: GAIN3_REF },
       uGain3:   { value: 1 },
       uRing:    { value: 0 },
+      uCursor:  { value: new THREE.Vector2() },
       uFocus:   { value: new THREE.Vector3() },
       uFocusR:  { value: 0 },
       uPickSize: { value: 5 }

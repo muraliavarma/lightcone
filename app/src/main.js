@@ -152,7 +152,7 @@ async function boot() {
     },
     onPhoto: (on) => { sky.setEnabled(on); queueHash(); },
     onMode: (m) => { m ? rig.unfold() : rig.home(); if (tour) tour.stop(); },
-    onHome: () => { rig.home(); if (tour) tour.stop(); },
+    onHome: () => { panel.close(); rig.home(); if (tour) tour.stop(); },
     onFree: () => rig.release(),
     onTour: () => tour && tour.toggle()
   });
@@ -168,6 +168,8 @@ async function boot() {
     prev: document.getElementById('tPrev'),
     exit: document.getElementById('tExit')
   }, () => hud.setMode(rig.stage, rig.st.u));
+  // a stale object panel over a moving tour reads as a bug — every stop clears it
+  tour.onGo = () => panel.close();
   tour.load(manifest.__root);
 
   // permalink restore (§6.6)
@@ -278,6 +280,8 @@ function loop(now) {
   // to is legible at every scale from 40 Mpc to 8 Gpc. Ring markers come up only
   // where a real photograph is behind the dots (§6.3).
   const ring = sky.detailOn ? Math.max(0, 1 - u / 0.25) : 0;
+  if (pointer.on) field.shared.uCursor.value.set((pointer.x / W) * 2 - 1, 1 - (pointer.y / H) * 2);
+  else field.shared.uCursor.value.set(0, 0);
   field.frame(atten, dpr, rig.st.dist || 420, ring, rig.focus);
   sky.setMix(u);
   sky.update(rig.st.ra, rig.st.dec, rig.st.fov, u, W / H);

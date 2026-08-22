@@ -62,6 +62,7 @@ export class Tour {
     if (i < 0) i = 0;
     if (i >= this.stops.length) { this.stop(); return; }
     this.i = i;
+    if (this.onGo) this.onGo();
     const s = this.stops[i];
     this.step.textContent = `${i + 1} / ${this.stops.length}`;
     this.title.textContent = s.title || '';
@@ -89,7 +90,9 @@ export class Tour {
       // frame. A stop out at the quasars is about how few and how far they are;
       // swing that far off-axis and you leave the survey cone entirely, so stay
       // near the sight line and look out through the whole shell.
-      const dist = Math.max(60, Math.min(4200, D * 0.62));
+      // Deep stops sit ~6 Gpc out; standing 4 Gpc off leaves a near-black frame.
+      // Stand much closer and look out through the shell instead.
+      const dist = D > 1500 ? 2400 : Math.max(60, Math.min(4200, D * 0.62));
       const oyaw = D > 1500 ? 0.45 : 1.28;
       rig.stage = STAGE.FREE;
       rig.released = true;

@@ -67,7 +67,9 @@ export class Panel {
     const L = LAYERS[sel.layer] || {};
     const isQso = L.group === 'qso';
     this.title.textContent = sel.tidStr ? `DESI ${sel.tidStr}` : L.label || 'Object';
-    this.cls.textContent = `${L.label || sel.layer} · ${sel.layer}`;
+    this.cls.textContent = sel.layer === 'local'
+      ? 'Cosmicflows-4 / 2MRS · measured distance'
+      : `${L.label || sel.layer} · DESI DR1`;
     this.cross.style.display = isQso ? 'block' : 'none';
 
     const dc = dcOfZ(sel.z);
@@ -203,11 +205,14 @@ export class Panel {
       ctx.beginPath(); ctx.moveTo(x, padT - 2); ctx.lineTo(x, padT + H); ctx.stroke();
       ctx.restore();
       const w = ctx.measureText(o.name).width + 5;
-      const row = x > rowEnd[0] ? 0 : x > rowEnd[1] ? 1 : -1;
+      // clamp inside the plot so a line near 9800 Å doesn't shove its label
+      // off the right edge (seen with [O II]/Ca at z ≈ 1.5)
+      const lx = Math.min(x + 2, wCss - padR - w);
+      const row = lx > rowEnd[0] ? 0 : lx > rowEnd[1] ? 1 : -1;
       if (row < 0) continue;
-      rowEnd[row] = x + w;
+      rowEnd[row] = lx + w;
       ctx.fillStyle = dim;
-      ctx.fillText(o.name, x + 2, row === 0 ? 0 : 10);
+      ctx.fillText(o.name, lx, row === 0 ? 0 : 10);
     }
     ctx.restore();
 

@@ -37,8 +37,8 @@ export const LAYERS = {
   web_bgs:  { color: 0xE5C078, group: 'web',    label: 'Bright galaxy',        pickable: true,  size: 3.0, min: 0.9,  max: 4.6, max3: 3.2, op: 0.85, op3: 0.15 },
   web_lrg:  { color: 0xD9785A, group: 'web',    label: 'Luminous red galaxy',  pickable: true,  size: 3.0, min: 0.9,  max: 4.6, max3: 3.2, op: 0.82, op3: 0.15 },
   web_elg:  { color: 0x6CA8CE, group: 'web',    label: 'Emission-line galaxy', pickable: true,  size: 2.6, min: 0.85, max: 4.2, max3: 3.0, op: 0.78, op3: 0.13 },
-  qso_desi: { color: 0xA78BDB, group: 'qso',    label: 'Quasar',               pickable: true,  size: 3.2, min: 0.9,  max: 4.6, max3: 3.2, op: 0.85, op3: 0.22 },
-  qso_sky:  { color: 0xA78BDB, group: 'qso',    label: 'Quasar',               pickable: false, size: 2.6, min: 0.85, max: 3.8, max3: 2.6, op: 0.55, op3: 0.13 }
+  qso_desi: { color: 0xA78BDB, group: 'qso',    label: 'Quasar',               pickable: true,  size: 3.2, min: 0.9,  max: 4.6, max3: 3.2, op: 0.85, op3: 0.30 },
+  qso_sky:  { color: 0xA78BDB, group: 'qso',    label: 'Quasar',               pickable: false, size: 2.6, min: 0.85, max: 3.8, max3: 2.6, op: 0.55, op3: 0.20 }
 };
 
 // 3D brightness gain. The same opacity cannot serve a view of two million points

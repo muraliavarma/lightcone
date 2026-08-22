@@ -1,6 +1,6 @@
 # Lightcone
 
-**Live: https://lightcone.muraliavarma.workers.dev**
+**Live: https://lightcone.murlax.com** (mirror: https://lightcone.muraliavarma.workers.dev)
 
 Look at the real sky, toggle it into 3D, and fly through ~2.8M real DESI
 redshifts — every dot is a measured galaxy, quasar, or star. Click any dot

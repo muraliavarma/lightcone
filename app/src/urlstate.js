@@ -16,12 +16,14 @@ export function readHash() {
     fx: num('fx', 0), fy: num('fy', 0), fz: num('fz', 0),
     stage: num('st', STAGE.PHOTO) | 0,
     photo: p.get('ph') !== '0',
+    lens: p.get('lens') === '1',
+    lookback: num('lt', 5),
     off: (p.get('off') || '').split(',').filter(Boolean)
   };
 }
 
 let last = '';
-export function writeHash(rig, photoOn, offGroups) {
+export function writeHash(rig, photoOn, offGroups, lensOn = false, lookback = 5) {
   const s = rig.st;
   const p = [`ra=${r(s.ra)}`, `dec=${r(s.dec)}`, `fov=${r(s.fov, 2)}`, `u=${r(s.u, 3)}`];
   if (s.dist) p.push(`d=${r(s.dist, 1)}`);
@@ -30,6 +32,7 @@ export function writeHash(rig, photoOn, offGroups) {
   if (s.fx || s.fy || s.fz) p.push(`fx=${r(s.fx, 1)}`, `fy=${r(s.fy, 1)}`, `fz=${r(s.fz, 1)}`);
   if (rig.stage !== STAGE.PHOTO) p.push(`st=${rig.stage}`);
   if (!photoOn) p.push('ph=0');
+  if (lensOn) p.push('lens=1', `lt=${r(lookback, 3)}`);
   if (offGroups.length) p.push(`off=${offGroups.join(',')}`);
   const h = '#' + p.join('&');
   if (h === last) return;

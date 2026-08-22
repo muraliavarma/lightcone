@@ -1,5 +1,8 @@
 app/data/
 .venv/
+__pycache__/
+*.pyc
 pipeline/cache/
 node_modules/
+.claude/
 .DS_Store

@@ -1,6 +1,6 @@
 // Manifest + chunk streaming (§6.2). Near shells first, then the rest in the
 // background, parsed in a small worker pool.
-import { DATA_ROOT, LAYERS } from './config.js';
+import { DATA_ROOT, LAYERS, QUALITY } from './config.js';
 
 const POOL = Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1));
 
@@ -31,13 +31,17 @@ export class ChunkStream {
     this.totalPoints = 0;
     this.loadedPoints = 0;
 
-    const prio = { stars: 0, local: 1, web_bgs: 2, web_lrg: 3, qso_desi: 3, web_elg: 4, qso_sky: 5 };
+    const prio = {
+      stars: 0, local_cf4: 1, local_2mrs: 1,
+      web_bgs: 2, web_lrg: 3, qso_desi: 3, web_elg: 4, qso_sky: 5
+    };
     for (const layer of manifest.layers) {
       if (!LAYERS[layer.name]) { console.warn(`[lightcone] unknown layer "${layer.name}" — skipped`); continue; }
       layer.files.forEach((f, i) => {
-        this.totalPoints += f.count;
+        const v = QUALITY === 'lite' && f.lite ? { ...f, ...f.lite } : f;
+        this.totalPoints += v.count;
         this.queue.push({
-          layer: layer.name, path: f.path, count: f.count,
+          layer: layer.name, path: v.path, count: v.count, fullCount: f.count,
           hasTid: (f.arrays || []).includes('targetid'),
           isStars: layer.name === 'stars',
           key: (prio[layer.name] ?? 9) * 1000 + (f.dmax != null ? Math.min(999, Math.round(f.dmax / 12)) : i)

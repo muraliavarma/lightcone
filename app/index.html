@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Lightcone — every dot is a real galaxy</title>
-<meta name="description" content="The real sky, unfolded into the three-dimensional cosmic web: 2.5 million measured galaxy redshifts from DESI DR1 over Legacy Surveys DR11 imagery.">
+<title>Lightcone — unfold the real universe</title>
+<meta name="description" content="Unfold real telescope imagery into a 3D map of up to 2.8 million measured galaxies, quasars, and stars. Explore DESI DR1 by distance and cosmic time.">
 <meta name="color-scheme" content="dark">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400&family=Spectral:wght@300;400&display=swap">
+<meta name="theme-color" content="#05070B">
+<meta property="og:title" content="Lightcone — unfold the real universe">
+<meta property="og:description" content="The photographed sky and its measured depth, in one continuous map.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lightcone.murlax.com">
+<meta property="og:image" content="https://lightcone.murlax.com/data/home_coma_dr11.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='5' fill='%23D9A84E'/%3E%3Cpath d='M32 3 11 57h42z' fill='none' stroke='%23E9E4D8' stroke-width='3'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -19,7 +24,7 @@
 
   <header class="tl">
     <h1>Lightcone</h1>
-    <p>every dot is a real galaxy</p>
+    <p>every dot is a real measurement</p>
   </header>
 
   <nav class="tr" aria-label="Layers">
@@ -34,11 +39,22 @@
 
   <div class="bc">
     <div class="seg" role="group" aria-label="Mode">
-      <button id="mPhoto" class="on">Photo · 2D</button>
-      <button id="mDepth">Depth · 3D</button>
+      <button id="mPhoto" class="on" aria-pressed="true">Photo · 2D</button>
+      <button id="mDepth" aria-pressed="false">Depth · 3D</button>
     </div>
     <button class="chip" id="btnHome">Home</button>
     <button class="chip hidden" id="btnFree">release camera</button>
+  </div>
+
+  <div class="epoch" id="epoch">
+    <button class="chip" id="chipEpoch" aria-pressed="false" aria-expanded="false" title="Isolate measurements from one band of cosmic history">time lens</button>
+    <div class="epochControl" id="epochControl" hidden>
+      <span class="epochNow">now</span>
+      <input id="epochRange" type="range" min="0" max="12800" step="25" value="5000" aria-label="Lookback time in millions of years">
+      <span class="epochOld">12.8 Gyr</span>
+      <output id="epochOut" for="epochRange" aria-live="polite">5.00 Gyr ago · ±0.45</output>
+      <button class="epochClose" id="epochClose" aria-label="Show all cosmic time">×</button>
+    </div>
   </div>
 
   <div class="bl" id="readout"></div>
@@ -57,9 +73,9 @@
 
   <div class="tip" id="tip" hidden></div>
 
-  <aside id="panel" aria-hidden="true" aria-label="Object details"></aside>
+  <aside id="panel" aria-hidden="true" aria-label="Object details" tabindex="-1"></aside>
 
-  <div class="boot" id="boot"><span>reading the sky…</span></div>
+  <div class="boot" id="boot" role="status" aria-live="polite"><span>reading the sky…</span></div>
 </div>
 
 <script type="module" src="src/main.js"></script>

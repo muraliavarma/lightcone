@@ -54,7 +54,7 @@ def download(url: str, dest_name: str, retries: int = 3, min_bytes: int = MIN_CA
     for attempt in range(1, retries + 1):
         try:
             cmd = [
-                "curl", "-sS", "-L", "-C", "-",
+                "curl", "-fsS", "-L", "-C", "-",
                 "--retry", "2", "--retry-delay", "3",
                 "--connect-timeout", "20",
                 "-o", str(dest), url,
@@ -131,6 +131,15 @@ def subsample_idx(n_total: int, n_target: int) -> np.ndarray:
         idx = g.choice(n_total, size=n_target, replace=False)
     idx.sort()
     return idx
+
+
+def lod_idx(n_total: int, n_target: int) -> np.ndarray:
+    """Deterministic, evenly spaced LOD indices that preserve radial ordering."""
+    if n_target >= n_total:
+        return np.arange(n_total)
+    if n_target <= 0:
+        return np.empty(0, dtype=np.int64)
+    return np.linspace(0, n_total - 1, n_target, dtype=np.int64)
 
 
 def print_summary(rows: list[tuple]) -> None:

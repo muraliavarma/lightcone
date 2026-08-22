@@ -2,9 +2,12 @@
 // field (§6.2), the imagery (§6.3), the parsec-scale star ball (§6.4), picking
 // and the drill-down panel (§6.5), the HUD (§6.6) and the tour (§6.7).
 import * as THREE from '../vendor/three/three.module.js';
-import { STAGE, LAYERS, GROUPS, REDUCED_MOTION, FOV_PHOTO_START } from './config.js';
+import {
+  STAGE, LAYERS, GROUPS, REDUCED_MOTION, FOV_PHOTO_START,
+  DPR_MAX, LOW_POWER, QUALITY, LENS_HALF_GYR
+} from './config.js';
 import { loadManifest, ChunkStream } from './loader.js';
-import { initCosmo, xyzToRaDec } from './cosmo.js';
+import { initCosmo, xyzToRaDec, zOfTlb, dcOfZ, tlbOfZ, zOfDc } from './cosmo.js';
 import { PointField } from './points.js';
 import { StarField } from './stars.js';
 import { Sky } from './sky.js';
@@ -24,7 +27,7 @@ renderer.autoClear = false;
 renderer.setClearColor(0x05070B, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-let dpr = Math.min(2, devicePixelRatio || 1);
+let dpr = Math.min(DPR_MAX, devicePixelRatio || 1);
 let W = 1, H = 1;
 
 // -------------------------------------------------- HDR accumulation + rolloff
@@ -36,6 +39,9 @@ let W = 1, H = 1;
 // fullscreen pass rolls the highlights off: identity below the knee, asymptotic
 // to 1 above it, applied to the brightest channel so hue survives.
 const Composite = (() => {
+  // The lite catalog is already sparse enough to avoid highlight clipping; skip
+  // an extra half-float framebuffer on memory-constrained phones.
+  if (LOW_POWER) return null;
   const ext = renderer.extensions;
   const floatRT = ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float');
   // no float target (or no WebGL2): render straight to the canvas and accept
@@ -100,7 +106,7 @@ function selectAt(cx, cy) {
   const rd = xyzToRaDec(x, y, z);
   return {
     chunk: hit.chunk, index: i, layer: c.layer,
-    ra: rd.ra, dec: rd.dec, z: c.sec[i],
+    ra: rd.ra, dec: rd.dec, z: c.sec[i], distance: Math.hypot(x, y, z),
     // §2a: TARGETID is int64 > 2^53 — it never becomes a Number
     tidStr: c.tid ? c.tid[i].toString() : null
   };
@@ -110,6 +116,18 @@ function openSelection(sel) {
   if (!sel) { panel.close(); return; }
   panel.open(sel);
   document.getElementById('hud').classList.add('panelopen');
+}
+
+function setLens(on, lookback, updateHud = true) {
+  const t = Math.max(0, Math.min(12.8, Number(lookback) || 0));
+  const loT = Math.max(0, t - LENS_HALF_GYR);
+  const hiT = Math.min(12.866, t + LENS_HALF_GYR);
+  const lo = dcOfZ(zOfTlb(loT));
+  const hi = dcOfZ(zOfTlb(hiT));
+  field.setLens(on, lo, hi);
+  stars.setLens(on);
+  if (updateHud && hud) hud.setLensState(on, t);
+  queueHash();
 }
 
 // ------------------------------------------------------------------ permalink
@@ -135,6 +153,7 @@ function applyHash(h) {
     const on = !h.off.includes(g.id);
     if (g.id === 'stars') stars.setEnabled(on); else field.setGroupVisible(g.id, on);
   }
+  setLens(h.lens, h.lookback, true);
   hud.setMode(rig.stage, rig.st.u);
 }
 
@@ -154,10 +173,20 @@ async function boot() {
     onMode: (m) => { m ? rig.unfold() : rig.home(); if (tour) tour.stop(); },
     onHome: () => { panel.close(); rig.home(); if (tour) tour.stop(); },
     onFree: () => rig.release(),
+    onLens: (on, lookback) => setLens(on, lookback, false),
     onTour: () => tour && tour.toggle()
   });
   sky.onSource = (s) => hud.setSource(s);
   panel.onClose = () => { hoverKey = ''; document.getElementById('hud').classList.remove('panelopen'); };
+  panel.onLocate = (sel) => {
+    panel.close();
+    sky.setEnabled(true);
+    hud.setPhotoChip(true);
+    const t = tlbOfZ(zOfDc(sel.distance));
+    setLens(true, t, true);
+    rig.showSky(sel.ra, sel.dec, 0.35);
+    hud.dismissHint();
+  };
 
   tour = new Tour(rig, {
     card: document.getElementById('tourCard'),
@@ -169,7 +198,7 @@ async function boot() {
     exit: document.getElementById('tExit')
   }, () => hud.setMode(rig.stage, rig.st.u));
   // a stale object panel over a moving tour reads as a bug — every stop clears it
-  tour.onGo = () => panel.close();
+  tour.onGo = () => { panel.close(); setLens(false, hud.lookback, true); };
   tour.load(manifest.__root);
 
   // permalink restore (§6.6)
@@ -194,7 +223,7 @@ async function boot() {
   setTimeout(() => hud.bootDone(), 6000);
 
   if (new URLSearchParams(location.search).has('debug')) {
-    window.__lc = { renderer, field, stars, sky, rig, picker, panel, hud, tour, manifest };
+    window.__lc = { renderer, field, stars, sky, rig, picker, panel, hud, tour, manifest, quality: QUALITY, setLens };
   }
   rig.onChange = () => { hud.setMode(rig.stage, rig.st.u); queueHash(); };
   hud.setMode(rig.stage, rig.st.u);
@@ -227,9 +256,9 @@ function bindInput() {
   canvas.addEventListener('pointerdown', () => canvas.classList.add('grabbing'));
   addEventListener('pointerup', () => canvas.classList.remove('grabbing'));
   addEventListener('keydown', (e) => {
-    if (e.target !== document.body) return;
-    if (e.key === 'Escape' && panel.isOpen) panel.close();
-    else if (e.key === 'h' || e.key === 'H') rig.home();
+    if (e.key === 'Escape' && panel.isOpen) { panel.close(); return; }
+    if (e.target !== document.body && e.target !== canvas) return;
+    if (e.key === 'h' || e.key === 'H') rig.home();
     else if (e.key === 'd' || e.key === 'D') rig.unfold();
   });
   addEventListener('resize', resize);
@@ -238,7 +267,7 @@ function bindInput() {
 function resize() {
   W = Math.max(1, innerWidth);
   H = Math.max(1, innerHeight);
-  dpr = Math.min(2, devicePixelRatio || 1);
+  dpr = Math.min(DPR_MAX, devicePixelRatio || 1);
   renderer.setPixelRatio(dpr);
   renderer.setSize(W, H, false);
   if (Composite) Composite.resize(Math.round(W * dpr), Math.round(H * dpr));
@@ -296,7 +325,7 @@ function loop(now) {
 
   if (hashPending && now - lastHash > 260) {
     hashPending = false; lastHash = now;
-    writeHash(rig, hud.photo, hud.offGroups);
+    writeHash(rig, hud.photo, hud.offGroups, hud.lens, hud.lookback);
     lastWritten = location.hash;
   }
 }

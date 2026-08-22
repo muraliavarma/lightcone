@@ -34,6 +34,21 @@ export const dcOfZ = (z) => lerpTable(ZD, z, 1);
 /** Lookback time in Gyr for redshift z. */
 export const tlbOfZ = (z) => lerpTable(ZT, z, 1);
 
+/** Invert lookback time → z (the table is monotonic in both columns). */
+export function zOfTlb(t) {
+  if (!ZT || ZT.length < 2) return NaN;
+  if (t <= 0) return 0;
+  const last = ZT.length - 1;
+  if (t >= ZT[last][1]) return ZT[last][0];
+  let lo = 0, hi = last;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (ZT[mid][1] < t) lo = mid; else hi = mid;
+  }
+  const q = (t - ZT[lo][1]) / (ZT[hi][1] - ZT[lo][1]);
+  return ZT[lo][0] + q * (ZT[hi][0] - ZT[lo][0]);
+}
+
 /** Invert D_C → z (the table is monotonic in both columns). */
 export function zOfDc(d) {
   if (!ZD || ZD.length < 2) return NaN;

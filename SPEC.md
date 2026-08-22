@@ -1,6 +1,6 @@
-# LIGHTCONE — Build Specification v1
+# LIGHTCONE — Build Specification v2
 
-**One-liner**: A single-page web app where you look at the *real* sky (DESI Legacy Surveys DR11 imagery), toggle it into 3D — every galaxy popping to its measured distance — fly the cosmic web of ~2–3M real DESI redshifts, and click any dot to see its actual photograph and its actual spectrum.
+**One-liner**: A single-page web app where you look at the *real* sky (DESI Legacy Surveys DR11 imagery), zoom to individual survey pixels, toggle it into 3D, slice it by cosmic time, and inspect the real photograph and (for DESI targets) spectrum behind a measured point.
 
 **Byline/credits**: "Built from DESI DR1 × Legacy Surveys DR11 × Gaia (ATHYG) × Cosmicflows-4."
 
@@ -14,13 +14,13 @@ Neither agent edits the other's directory. Both read this file fully first.
 ---
 
 ## 1. Non-goals (hard refusals)
-No accounts, tracking, analytics, cookie banners. No simulation data. No artist impressions. No backend/server code — static files only. No React/framework — vanilla JS + three.js. No settings sprawl. No auto-rotation anywhere. Genesis mode, brick-quality choropleths, Euclid data: **cut from v1**.
+No accounts, tracking, analytics, cookie banners. No simulation data. No artist impressions. No backend/server code — static files only. No React/framework — vanilla JS + three.js. No settings sprawl. No auto-rotation anywhere. Genesis mode, brick-quality choropleths, Euclid data: **cut**. The one added analysis control is the time lens (§6.9).
 
 ## 2. Verified live endpoints (all tested 2026-08-21/22)
 
 | Endpoint | CORS | Use |
 |---|---|---|
-| `https://www.legacysurvey.org/viewer/jpeg-cutout?ra={ra}&dec={dec}&layer=ls-dr11&pixscale={as/px}&size={px}` | `*` open | live photos + 2D imagery patches. Out-of-footprint returns HTTP 200 with ~1652-byte blank black JPEG — detect by byte size < 2500 and fall back |
+| `https://www.legacysurvey.org/viewer/jpeg-cutout?ra={ra}&dec={dec}&layer=ls-dr11&pixscale={as/px}&size={px}` | `*` open | live photos + 2D patches. Out-of-footprint answers HTTP 200 with a flat gray JPEG whose byte size varies with requested dimensions; detect low luminance range, then fall back |
 | `https://alasky.cds.unistra.fr/hips-image-services/hips2fits?hips=CDS%2FP%2FDSS2%2Fcolor&ra=&dec=&fov=&width=&height=&projection=TAN&format=jpg` | `*` open | all-sky fallback imagery; also supports `projection=CAR` full-sky; max 50 Mpx per request; mirror alaskybis.cds.unistra.fr |
 | `https://astrosparcl.datalab.noirlab.edu/api/find/?limit=N` (POST JSON) | `*` open | targetid→sparcl_id: body `{"outfields":["sparcl_id"],"search":[["data_release","DESI-DR1"],["specid",<targetid>],["specprimary",1]]}` |
 | `https://astrosparcl.datalab.noirlab.edu/api/spectras/?include=flux,model&format=json` (POST JSON array of sparcl_id) | `*` open | real spectrum. **Never request `wavelength`**: grid is exactly `3600.0 + 0.8*i` Å, i=0..7780. Response `[header, rec]`; rec.flux, rec.model; units 1e-17 erg/s/cm²/Å. ~100 KB gz, <1 s |
@@ -67,6 +67,7 @@ Local run: any static server from `app/` (e.g. `python3 -m http.server 8143 -d a
 
 Per-layer binary files, little-endian, struct-of-arrays, **each file ≤ 20 MB**:
 `[Float32 xyz × 3N][Float32 z × N][BigInt64 targetid × N (DESI layers only)]`
+Each manifest file may also carry `lite: {path,count}`: a deterministic mobile LOD with the identical layout.
 - Frame: equatorial cartesian, **units Mpc comoving**: `x = D·cos(dec)cos(ra), y = D·cos(dec)sin(ra), z = D·sin(dec)`, D = D_C(z) from the cosmology above (CF4: D from distance modulus; 2MRS: D = V_cmb/H0).
 - Sky direction for the Unfold = `normalize(xyz)` — no extra columns needed.
 - The `z` array: spectroscopic/heliocentric redshift as measured (Float32). For CF4/2MRS store cz/c equivalents.
@@ -76,28 +77,29 @@ Per-layer binary files, little-endian, struct-of-arrays, **each file ≤ 20 MB**
 | name | source | count target | targetid? |
 |---|---|---|---|
 | `stars` | ATHYG m10 | ~350k | no — **units parsec**, separate scale (see §6.4); arrays: xyz(pc as Float32), mag(Float32) instead of z |
-| `local` | CF4 galaxies + 2MRS (dedupe 2MRS within 30′ & 300 km/s of a CF4 entry) | ~90k | no |
+| `local_cf4` | Cosmicflows-4, redshift-independent indicator distance | ~46k | no |
+| `local_2mrs` | 2MRS, CMB-corrected cz/H0 distance; dedupe within 30″ & 300 km/s of CF4 | ~32k | no |
 | `web_bgs`,`web_lrg`,`web_elg` | DESI LSS clustering | 500k + 400k + 600k (uniform random subsample) | yes |
 | `qso_desi` | DESI QSO clustering | ~400k | yes |
 | `qso_sky` | Milliquas (spectroscopic-z rows only, `Q`-type; drop photo-z) | ~500k | no |
 
-Also `app/data/sky_base.jpg`: full-sky plate-carrée (CAR) color image 8192×4096 from hips2fits `CDS/P/DSS2/color` (one request, format=jpg; retry on mirror). And `app/data/tours.json` (content in §7).
+Also: `sky_base.jpg` (8192×4096 DSS2 CAR), `sky_base_low.jpg` (4096×2048 mobile plate), and a pre-baked 1536px DR11 Coma opening field so first paint never waits on a courtesy API. `tours.json` contains §7.
 
 ## 5. Pipeline spec (Sonnet agent)
 
-Python 3, venv in `.venv`. Deps: `numpy`, `astropy` (FITS + no network use), `requests`. All downloads cached in `pipeline/cache/` (skip if present, verify size > 1 KB). Entrypoint `python pipeline/build.py --all`; also `--layer <name>` for one layer. Print a summary table at the end (layer, rows in, rows out, bytes out).
+Python 3, venv in `.venv`. Deps: `numpy`, `astropy` (FITS + cosmology), `scipy` (catalog cross-match), `requests`. All downloads cached in `pipeline/cache/` (skip if present, verify size > 1 KB). Entrypoint `python pipeline/build.py --all`; also `--layer <name>` for one layer. Print a summary table at the end (layer, rows in, rows out, bytes out).
 
 ### 5.1 DESI LSS (the cosmic web)
 Files (each `{NGC,SGC}`): `BGS_BRIGHT_*_clustering.dat.fits` (463 MB total), `LRG_*` (207 MB), `ELG_LOPnotqso_*` (275 MB), `QSO_*` (128 MB) from the LSScats v1.5 URL in §2. Columns: `TARGETID, RA, DEC, Z`. Filter: finite Z, 0.001 < Z < 4.5. Subsample uniformly at random (fixed seed 42) to the §4 targets. Compute D_C via `astropy.cosmology.FlatLambdaCDM(H0=67.4, Om0=0.315).comoving_distance` (also generate the manifest lookup tables with it). Shell-split: BGS/LRG/ELG/QSO each into ≤20 MB files ordered by D.
 
-### 5.2 Local layer
-CF4 (VizieR J/ApJ/944/94 table2): RA, Dec, DM → D = 10^((DM−25)/5) Mpc; keep D < 350. 2MRS table3: RA, Dec, V_cmb → D = V/67.4; keep 1 < D < 350; dedupe against CF4 as in §4. (2MRS `table3.dat` is fixed-width; the ReadMe at the same directory defines byte columns — parse defensively, validate a few known rows.)
+### 5.2 Nearby layers
+Keep sources distinct. CF4 (VizieR J/ApJ/944/94 table2): RA, Dec, DM → D = 10^((DM−25)/5) Mpc and retain the catalog's measured Vcmb for z. 2MRS table3: transform solar-frame cz to the CMB frame, then D = Vcmb/67.4. Keep 0 < D < 350 Mpc. Dedupe 2MRS against CF4 within 30 arcsec and 300 km/s—30 arcmin incorrectly merges separate cluster members.
 
 ### 5.3 Stars
 ATHYG m10 CSV: columns include `x0,y0,z0` (equatorial cartesian, parsecs) and `mag`. Keep rows with dist>0; write xyz(pc)+mag Float32. ~350k rows.
 
 ### 5.4 Quasar sky
-Milliquas FITS: keep rows whose type marks a confirmed QSO/AGN with **spectroscopic** z (per its README conventions; when ambiguous, require z present and TYPE containing 'Q'), z < 5. RA/Dec/z → xyz.
+Milliquas FITS: keep rows whose type marks a confirmed QSO/AGN with **spectroscopic** z (require z and TYPE containing `Q`), z < 5. Before sampling, remove entries matching the DESI QSO layer within 2″ and Δz < 0.02; otherwise the same quasar appears as two dots. RA/Dec/z → xyz.
 
 ### 5.5 Sky base image + misc
 hips2fits CAR 8192×4096 DSS2 color → `sky_base.jpg` (~5–15 MB). Write `tours.json` from §7 verbatim. Write README.md (≤60 lines: what Lightcone is, how to run pipeline + app, credit block from §9).
@@ -111,7 +113,7 @@ Vanilla ES modules + three.js (vendored; WebGL2). Target 60 fps with ~2.5M point
 
 ### 6.1 The three-stage camera (core mechanic — get this exactly right)
 One continuous perspective camera, no cuts:
-1. **2D / Photo mode** (default start): camera at origin looking at a sky direction; narrow FOV (start ~4°, wheel zooms FOV 0.5°–60°). The sky sphere (radius R_SKY = 9000 scene units) shows imagery (§6.3) + galaxy dots painted at their sky positions (points at radius R_SKY along their `normalize(xyz)`).
+1. **2D / Photo mode** (default start): camera at origin looking at a sky direction; narrow FOV (start ~4°, wheel/pinch zooms FOV 0.015°–60°). The sky sphere (radius R_SKY = 9000 scene units) shows imagery (§6.3) + galaxy dots painted at their sky positions (points at radius R_SKY along their `normalize(xyz)`).
 2. **Anchored 3D** (toggle "Depth"): animate u:0→1 (~800 ms smoothstep): each point's position = `mix(dir*R_SKY, xyz, u)`; simultaneously dolly the camera straight back along the view axis (stay pointed at the same patch) and widen FOV toward ~55°. Drag = clamped head-parallax orbit (±~0.5 rad) around the view axis, scaled by u. The photo wall(s) stay at R_SKY, fading to ~40% opacity.
 3. **Free flight**: dragging past the clamp (sustained drag at the limit for >300 ms, or a "release camera" button) eases the clamp off → full orbit + wheel-dolly around a focus point; double-click a point to re-focus there. A "Home" button returns to stage 1 pointing at the same patch (reverse animation).
 Toggling back to Photo from any stage animates the full reverse. `prefers-reduced-motion`: transitions jump-cut instead of animating.
@@ -121,22 +123,23 @@ One `THREE.Points` + custom ShaderMaterial per chunk file (interleaved or separa
 
 ### 6.3 Imagery
 - Base: `sky_base.jpg` mapped on the inside of the sky sphere (CAR → equirect UV; note RA runs east-left: flip U so RA increases leftward, and verify against a known constellation/Coma position).
-- Detail: when 2D-mode FOV < 3°, fetch `jpeg-cutout` (layer ls-dr11, size 1024, pixscale = FOV*3600/1024) for the current center as a CORS texture on a tangent quad at R_SKY; LRU cache 40 textures; detect the 1652-byte blank response → hips2fits DSS2 TAN fallback. Show a small "imagery: Legacy Surveys DR11" / "DSS2 (outside DR11 footprint)" source line.
+- Detail: below 5.5°, fetch `jpeg-cutout` for a tangent quad; stop at DECam's honest native 0.262″/px, then enlarge measured pixels. Detect blank frames by luminance variation, not byte size alone, and fall back to DSS2. LRU is 14 textures on desktop and 5 on mobile. Show a small "imagery: Legacy Surveys DR11" / "DSS2 (outside DR11 footprint)" source line.
 - "Photo" toggle chip hides/shows sphere + quads (dots remain).
 
 ### 6.4 Dual scale (stars)
 Stars (parsecs) live in a second scene rendered with its own camera whose distances are pc-scaled; crossfade: cosmic camera distance < 40 Mpc from origin → stars fade in as a local ball; > 40 Mpc → fade out. Stars are not clickable. Simple is fine; it just needs to make "home" feel inhabited.
 
 ### 6.5 Picking + panel
-Raycast against DESI layers + `local` (not stars, not qso_sky): per-chunk uniform spatial hash grid built in the Worker; hover = crosshair + name/ID; click opens the right-side panel (mockup v2 layout, §8 palette):
+GPU-pick DESI, both nearby layers, and Milliquas (not stars). Hover = class/ID; click opens the right-side evidence panel:
 - Photo: jpeg-cutout 256 px at the point's ra/dec (derive ra/dec from xyz), with blank-detection fallback; crosshair overlay for QSOs.
 - Numbers: z (as measured), D_C, lookback (manifest tables), RA/Dec, layer/class, plain-language line ("Light left this galaxy X ago").
 - Spectrum (DESI layers only): SPARCL find(specid=targetid string) → retrieve flux+model → plot on a canvas: flux (starlight, thin), model (brass), dashed vertical lines at (1+z)·λ_rest labeled from this list — galaxies em: [O II] 3728.5, Hβ 4862.7, [O III] 5008.2, Hα 6564.6, [S II] 6725; abs: Ca K 3934.8, Ca H 3969.6, G 4305.6, Mg b 5176.7, Na D 5893; QSO: Ly α 1215.67, Si IV 1399.8, C IV 1549.5, C III] 1908.7, Mg II 2799.1 (vacuum Å). Smooth flux with a 3-px boxcar. Loading state; graceful failure ("spectrum unavailable").
 - Link: `https://www.legacysurvey.org/viewer?ra=&dec=&layer=ls-dr11&zoom=13`.
-- `local`-layer objects: skip spectrum, show "distance measured directly (Cosmicflows-4)" where applicable.
+- `local_cf4`: use the rendered indicator distance and explicitly call it redshift-independent. `local_2mrs`: call the distance redshift-derived. Never conflate the two.
+- A local “locate on the photographed sky” action returns to this RA/Dec and activates the time lens at the object's lookback time.
 
 ### 6.6 HUD (mockup v2 is the design reference — near-monochrome, brass accent, IBM Plex Mono for readouts, Spectral for the wordmark; system fallbacks, `font-display: swap`)
-Top-left wordmark "Lightcone" + sub "every dot is a real galaxy". Top-right: layer chips (Stars/Nearby/Cosmic web/Quasars) + "photo" chip. Bottom-center: mode segmented control [Photo·2D | Depth·3D] + Home. Bottom-left readout: mode-dependent (2D: RA/Dec + FOV; 3D: distance from home + z at camera). Bottom-right: points loaded + fps. One fading hint line on first load. URL hash tracks state (`#ra,dec,fov,u,…`) — every view is a permalink. No other chrome.
+Top-left wordmark "Lightcone" + sub "every dot is a real measurement". Top-right: layer chips (Stars/Nearby/Cosmic web/Quasars) + "photo" chip. Bottom-center: mode segmented control [Photo·2D | Depth·3D] + Home. Bottom-left readout: mode-dependent (2D: RA/Dec + FOV; 3D: distance from home + z at camera). Bottom-right: points loaded + fps. One fading hint line on first load. URL hash tracks state (`#ra,dec,fov,u,…`) — every view is a permalink. No other chrome.
 
 ### 6.7 Tour
 "Tour" chip → plays `tours.json`: camera eases to each stop (stage-appropriate: some stops are 2D looks, some are cone views), caption card with the text, Next/Exit. Keyboard: arrows navigate, Esc exits.
@@ -144,10 +147,15 @@ Top-left wordmark "Lightcone" + sub "every dot is a real galaxy". Top-right: lay
 ### 6.8 Acceptance (frontend)
 Before real data exists, generate a synthetic `app/data/` with a tiny script honoring §4 exactly (delete after integration). With real data: loads to first stars < 1 s on localhost; 60 fps; unfold toggle works aimed at Coma (ra 194.9, dec 28.0) with the cluster's finger-of-god visible; click a BGS galaxy → photo + real spectrum render; tour plays through; no console errors; works in Chrome + Safari.
 
-## 7. tours.json content (verbatim)
+### 6.9 Time lens
+A single lookback-time slider defines a ±0.45 Gyr radial shell. In 2D it dims projected objects outside that epoch; in 3D it exposes a cross-section through the web. Picking follows the visible shell, stars recede, and `lens`/`lt` persist in the permalink. It is an analysis tool, not a cosmetic filter.
+
+Mobile defaults to deterministic per-shell LOD files (~848k points), a 4096px sky plate, DPR ≤1.35, and no HDR target. `?quality=full|lite` overrides this.
+
+## 7. tours.json content
 ```json
 {"stops":[
- {"id":"home","mode":"2d","ra":194.9,"dec":28.0,"fov":30,
+ {"id":"home","mode":"2d","ra":194.9,"dec":28.0,"fov":4,
   "title":"You are here",
   "text":"Every point of light in this app is a real measurement. This is the actual sky, photographed by a 4-meter telescope in Chile. Let's add the dimension your eyes can't see."},
  {"id":"coma","mode":"3d","ra":194.9,"dec":28.0,"z":0.023,
@@ -156,7 +164,7 @@ Before real data exists, generate a synthetic `app/data/` with a tiny script hon
  {"id":"wall","mode":"3d","ra":202.0,"dec":-1.0,"z":0.073,
   "title":"The Sloan Great Wall",
   "text":"A sheet of galaxies 1.4 billion light-years long — one of the largest known structures. Gravity has spent 13 billion years gathering galaxies into these filaments and walls."},
- {"id":"void","mode":"3d","ra":217.5,"dec":26.0,"z":0.05,
+ {"id":"void","mode":"3d","ra":222.0,"dec":46.0,"z":0.05,
   "title":"The Boötes Void",
   "text":"Almost nothing, for 330 million light-years. If the Milky Way sat at its center, we wouldn't have known other galaxies existed until the 1960s."},
  {"id":"deep","mode":"3d","ra":150.3,"dec":2.2,"z":2.5,

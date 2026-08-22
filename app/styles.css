@@ -1,5 +1,12 @@
 /* Lightcone — visual tokens §8. Dark only, explicit backgrounds, brass reserved
-   for things you can act on. No chrome beyond what §6.6 asks for. */
+   for things you can act on. Fonts are vendored: first paint makes no third-party
+   request, consistent with the no-tracking promise. */
+
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm-plex-mono-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("fonts/ibm-plex-mono-500.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "IBM Plex Sans"; src: url("fonts/ibm-plex-sans-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Spectral"; src: url("fonts/spectral-300.woff2") format("woff2"); font-weight: 300; font-display: swap; }
+@font-face { font-family: "Spectral"; src: url("fonts/spectral-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 
 :root {
   --panelw: min(348px, 90vw);
@@ -26,6 +33,7 @@ html, body {
 }
 
 #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
 #stage.grabbing { cursor: grabbing; }
 #stage.over { cursor: pointer; }
 
@@ -72,6 +80,28 @@ html, body {
 }
 .hint b { color: var(--gold); font-weight: 500; }
 .hint.gone { opacity: 0; }
+
+/* ------------------------------------------------------------ cosmic time */
+
+.epoch {
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%);
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: var(--mono); white-space: nowrap;
+}
+#chipEpoch[aria-pressed="true"] { color: var(--gold); border-color: rgba(217,168,78,.42); }
+.epochControl {
+  width: min(470px, calc(100vw - 150px)); display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto auto auto;
+  align-items: center; gap: 8px; padding: 5px 7px 5px 9px;
+  background: rgba(12,17,26,.9); border: 1px solid var(--line); border-radius: 2px;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.epochControl[hidden] { display: none; }
+.epochNow, .epochOld { color: var(--dim); font-size: 9px; letter-spacing: .06em; }
+#epochRange { width: 100%; height: 18px; margin: 0; accent-color: var(--gold); cursor: ew-resize; }
+#epochOut { min-width: 146px; color: var(--text); font-size: 10px; text-align: right; letter-spacing: .03em; }
+.epochClose { border: 0; background: none; color: var(--dim); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.epochClose:hover { color: var(--text); }
 
 /* ------------------------------------------------------------------ chips */
 
@@ -177,7 +207,13 @@ html, body {
 .pSpecSrc { text-transform: none; letter-spacing: .04em; opacity: .8; text-align: right; }
 .pCanvas { width: 100%; height: 182px; display: block; }
 .pSpecMsg { font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: .05em; min-height: 14px; }
+.pSpecWhy { margin: 7px 0 0; color: var(--dim); font-size: 10.5px; line-height: 1.5; }
 
+.pActions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 4px; }
+.pLocate { font-family: var(--mono); font-size: 10px; color: var(--gold); letter-spacing: .06em;
+  background: rgba(217,168,78,.06); border: 1px solid rgba(217,168,78,.35); border-radius: 2px;
+  padding: 7px 9px; cursor: pointer; }
+.pLocate:hover { border-color: var(--gold); background: rgba(217,168,78,.1); }
 .pLink { font-family: var(--mono); font-size: 10px; color: var(--gold); letter-spacing: .06em;
   text-decoration: none; border-bottom: 1px solid rgba(217,168,78,.3); }
 .pLink:hover { border-bottom-color: var(--gold); }
@@ -203,13 +239,23 @@ html.reduced *, html.reduced *::before, html.reduced *::after {
 
 @media (max-width: 720px) {
   :root { --pad: 12px; }
+  .tl { top: calc(10px + env(safe-area-inset-top)); }
   .tl h1 { font-size: 21px; }
-  .tr { max-width: 70vw; }
+  .tl p { font-size: 8.5px; }
+  /* Keep the controls below the wordmark instead of laying them over it. */
+  .tr { top: calc(49px + env(safe-area-inset-top)); right: 10px; max-width: calc(100vw - 20px); gap: 5px; }
+  .chip { padding: 5px 7px; }
   .credit { display: none; }
   /* one thing per corner: the phone's bottom edge belongs to the mode bar */
   .br { display: none; }
-  .bl { bottom: calc(var(--pad) + 46px); }
-  .hint { bottom: 118px; font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
-  .bc { max-width: 96vw; flex-wrap: wrap; justify-content: center; }
+  .bl { bottom: calc(140px + env(safe-area-inset-bottom)); }
+  .src { top: calc(109px + env(safe-area-inset-top)); right: 10px; }
+  .hint { bottom: calc(200px + env(safe-area-inset-bottom)); font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
+  .bc { bottom: calc(10px + env(safe-area-inset-bottom)); max-width: 96vw; flex-wrap: wrap; justify-content: center; }
+  .epoch { bottom: calc(106px + env(safe-area-inset-bottom)); max-width: 96vw; }
+  .epochControl { width: calc(100vw - 94px); grid-template-columns: minmax(90px,1fr) auto auto; gap: 6px; }
+  .epochNow, .epochOld { display: none; }
+  #epochOut { min-width: 120px; font-size: 9px; }
+  #panel { width: 100vw; padding-bottom: calc(26px + env(safe-area-inset-bottom)); }
   .pCanvas { height: 150px; }
 }

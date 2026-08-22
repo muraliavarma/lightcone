@@ -15,6 +15,7 @@ const UNFOLD = /* glsl */`
 const VERT = /* glsl */`
 uniform float uMix, uRSky, uAtten, uDpr, uSize, uMinPx, uMaxPx, uMaxPx3;
 uniform float uOpacity, uOpacity3, uFadeRef, uNearRef, uGain3, uRing, uFocusR;
+uniform float uLens, uLensLo, uLensHi;
 uniform vec2 uCursor;
 uniform vec3 uColor, uFocus;
 varying vec4 vCol;
@@ -32,8 +33,17 @@ ${UNFOLD}
   vec2 ndc = gl_Position.xy / max(gl_Position.w, 1e-6);
   float ringF = uRing * smoothstep(0.60, 0.18, distance(ndc, uCursor));
   vRing = ringF;
-  // Rings need room, so they get a size boost.
-  float boost = 1.0 + 0.75 * ringF;
+  // The time lens is a radial shell in comoving space. It works in both views:
+  // on the photograph it reveals which projected objects share an epoch; in 3D
+  // it becomes a clean cross-section through the cosmic web.
+  float lensEdge = max(8.0, (uLensHi - uLensLo) * 0.16);
+  float lensBand = smoothstep(uLensLo - lensEdge, uLensLo + lensEdge, d) *
+                   (1.0 - smoothstep(uLensHi - lensEdge, uLensHi + lensEdge, d));
+  float lensFloor = mix(0.04, 0.015, uMix);
+  float lensPeak = mix(2.2, 8.0, uMix);
+  float lensGain = mix(lensFloor, lensPeak, lensBand);
+  // Rings and in-epoch points need room, so they get a restrained size boost.
+  float boost = (1.0 + 0.75 * ringF) * mix(1.0, 1.0 + 0.35 * lensBand, uLens);
   gl_PointSize = clamp(uSize * boost * uAtten / dist,
                        uMinPx, mix(uMaxPx, uMaxPx3, uMix) * boost) * uDpr;
   // Depth modulation, one cue per stage. On the sky sphere every point is the
@@ -53,7 +63,8 @@ ${UNFOLD}
   if (uFocusR > 0.0) {
     fade3 *= mix(1.0, 0.16, smoothstep(uFocusR, uFocusR * 3.0, length(unfolded - uFocus)));
   }
-  vCol = vec4(uColor, mix(uOpacity * fade2, uOpacity3 * fade3, uMix));
+  float alpha = mix(uOpacity * fade2, uOpacity3 * fade3, uMix);
+  vCol = vec4(uColor, alpha * mix(1.0, lensGain, uLens));
 }`;
 
 const FRAG = /* glsl */`
@@ -71,12 +82,18 @@ void main() {
 }`;
 
 const PICK_VERT = /* glsl */`
-uniform float uMix, uRSky, uPickSize, uChunk;
+uniform float uMix, uRSky, uPickSize, uChunk, uLens, uLensLo, uLensHi;
 flat out vec4 vId;
 void main() {
 ${UNFOLD}
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(unfolded, 1.0);
-  gl_PointSize = uPickSize;
+  float edge = max(8.0, (uLensHi - uLensLo) * 0.20);
+  if (uLens > 0.5 && (d < uLensLo - edge || d > uLensHi + edge)) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+  } else {
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(unfolded, 1.0);
+    gl_PointSize = uPickSize;
+  }
   int i = gl_VertexID;
   vId = vec4(float(i & 255), float((i >> 8) & 255), float((i >> 16) & 255), uChunk) / 255.0;
 }`;
@@ -108,6 +125,9 @@ export class PointField {
       uNearRef: { value: GAIN3_REF },
       uGain3:   { value: 1 },
       uRing:    { value: 0 },
+      uLens:    { value: 0 },
+      uLensLo:  { value: 0 },
+      uLensHi:  { value: R_SKY },
       uCursor:  { value: new THREE.Vector2() },
       uFocus:   { value: new THREE.Vector3() },
       uFocusR:  { value: 0 },
@@ -168,7 +188,8 @@ export class PointField {
       const pm = new THREE.ShaderMaterial({
         uniforms: {
           uMix: this.shared.uMix, uRSky: this.shared.uRSky,
-          uPickSize: this.shared.uPickSize, uChunk: { value: idx + 1 }
+          uPickSize: this.shared.uPickSize, uChunk: { value: idx + 1 },
+          uLens: this.shared.uLens, uLensLo: this.shared.uLensLo, uLensHi: this.shared.uLensHi
         },
         vertexShader: PICK_VERT,
         fragmentShader: PICK_FRAG,
@@ -213,6 +234,12 @@ export class PointField {
     const far = focus.x || focus.y || focus.z;   // origin focus = the whole-cone view
     s.uFocusR.value = far ? standoff * 0.85 : 0;
     if (far) s.uFocus.value.copy(focus);
+  }
+
+  setLens(on, loMpc = 0, hiMpc = R_SKY) {
+    this.shared.uLens.value = on ? 1 : 0;
+    this.shared.uLensLo.value = Math.max(0, loMpc);
+    this.shared.uLensHi.value = Math.max(loMpc + 1, hiMpc);
   }
 
   set mix(u) { this.shared.uMix.value = u; }

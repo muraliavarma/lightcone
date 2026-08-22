@@ -14,7 +14,7 @@ N_TABLE_ROWS = 200
 TOURS = {
     "stops": [
         {
-            "id": "home", "mode": "2d", "ra": 194.9, "dec": 28.0, "fov": 30,
+            "id": "home", "mode": "2d", "ra": 194.9, "dec": 28.0, "fov": 4,
             "title": "You are here",
             "text": "Every point of light in this app is a real measurement. This is the actual sky, photographed by a 4-meter telescope in Chile. Let's add the dimension your eyes can't see.",
         },
@@ -29,7 +29,7 @@ TOURS = {
             "text": "A sheet of galaxies 1.4 billion light-years long — one of the largest known structures. Gravity has spent 13 billion years gathering galaxies into these filaments and walls.",
         },
         {
-            "id": "void", "mode": "3d", "ra": 217.5, "dec": 26.0, "z": 0.05,
+            "id": "void", "mode": "3d", "ra": 222.0, "dec": 46.0, "z": 0.05,
             "title": "The Boötes Void",
             "text": "Almost nothing, for 330 million light-years. If the Milky Way sat at its center, we wouldn't have known other galaxies existed until the 1960s.",
         },
@@ -60,8 +60,12 @@ def write_tours_json():
 
 def write_manifest(layers: list[dict]):
     z_to_dc, z_to_tlb = cosmology_tables()
+    full_count = sum(f["count"] for layer in layers for f in layer["files"])
+    lite_count = sum(f.get("lite", f)["count"] for layer in layers for f in layer["files"])
     manifest = {
+        "version": 2,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "counts": {"full": full_count, "lite": lite_count},
         "cosmology": {"H0": H0, "Om": OM0, "note": "flat LCDM, Planck 2018"},
         "z_to_dc": z_to_dc,
         "z_to_tlb": z_to_tlb,

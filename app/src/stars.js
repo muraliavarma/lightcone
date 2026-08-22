@@ -37,6 +37,7 @@ export class StarField {
     this.camera = new THREE.PerspectiveCamera(4, 1, 0.05, 200000);
     this.alpha = 1;
     this.enabled = true;
+    this.lens = false;
     this.count = 0;
     this.material = new THREE.ShaderMaterial({
       uniforms: {
@@ -69,11 +70,12 @@ export class StarField {
   }
 
   setEnabled(on) { this.enabled = on; }
+  setLens(on) { this.lens = !!on; }
 
   /** Mirror the cosmic camera at parsec scale and crossfade by distance. */
   sync(cosmic, atten, dpr) {
     const d = cosmic.position.length();
-    this.alpha = 1 - smoothstep(STAR_FADE_MPC * 0.5, STAR_FADE_MPC, d);
+    this.alpha = (1 - smoothstep(STAR_FADE_MPC * 0.5, STAR_FADE_MPC, d)) * (this.lens ? 0.08 : 1);
     this.material.uniforms.uAlpha.value = this.alpha;
     this.material.uniforms.uAtten.value = atten;
     this.material.uniforms.uDpr.value = dpr;

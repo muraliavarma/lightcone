@@ -4,7 +4,10 @@
 // Only jpeg-cutout and hips2fits are CORS-open (§2) — the {a-d}.legacysurvey.org
 // tile servers are NOT usable as WebGL textures and are never touched here.
 import * as THREE from '../vendor/three/three.module.js';
-import { R_SKY, DETAIL_FOV, CUTOUT_PX, TEX_CACHE, SHOW_GRATICULE } from './config.js';
+import {
+  R_SKY, DETAIL_FOV, CUTOUT_PX, TEX_CACHE, SHOW_GRATICULE, LOW_POWER,
+  HOME_RA, HOME_DEC, HOME_FOV
+} from './config.js';
 import { fetchCutout } from './cutout.js';
 
 const DEG = Math.PI / 180;
@@ -75,9 +78,11 @@ export class Sky {
     this.quad.visible = false;
     scene.add(this.quad);
 
-    this.cache = new Map();          // key → {tex, src}
-    this.cur = null;                 // {ra, dec, fov}
-    this.pending = null;
+    this.cache = new Map();          // key → {tex, src, fov, native}
+    // Reserve the opening field while its local, pre-baked DR11 image decodes.
+    // This prevents an avoidable 4–10 s courtesy-API request on every first load.
+    this.cur = { ra: HOME_RA, dec: HOME_DEC, fov: HOME_FOV, key: 'home', native: false };
+    this.pending = 'home';
     this.timer = 0;
 
     this._x = new THREE.Vector3();
@@ -88,11 +93,12 @@ export class Sky {
     this._m = new THREE.Matrix4();
 
     this._loadBase();
+    this._loadHome();
   }
 
   _loadBase() {
     new THREE.TextureLoader().load(
-      `${this.root}/sky_base.jpg`,
+      `${this.root}/${LOW_POWER ? 'sky_base_low.jpg' : 'sky_base.jpg'}`,
       (t) => {
         t.colorSpace = THREE.SRGBColorSpace;
         t.generateMipmaps = false;                  // avoids a seam at RA 180
@@ -103,7 +109,26 @@ export class Sky {
         this.mat.uniforms.uHasMap.value = 1;
       },
       undefined,
-      () => console.warn('[lightcone] sky_base.jpg missing — sky sphere stays blank')
+      () => console.warn('[lightcone] sky base missing — sky sphere stays blank')
+    );
+  }
+
+  _loadHome() {
+    new THREE.TextureLoader().load(
+      `${this.root}/home_coma_dr11.jpg`,
+      (t) => {
+        if (this.pending !== 'home') { t.dispose(); return; }
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.minFilter = THREE.LinearFilter;
+        t.generateMipmaps = false;
+        this.cache.set('home', { tex: t, src: 'Legacy Surveys DR11', fov: HOME_FOV, native: false });
+        this._show(t, HOME_RA, HOME_DEC, HOME_FOV, 'Legacy Surveys DR11', 'home', false);
+      },
+      undefined,
+      () => {
+        if (this.pending === 'home') { this.cur = null; this.pending = null; }
+        console.warn('[lightcone] pre-baked opening field missing; live imagery will be used');
+      }
     );
   }
 
@@ -138,11 +163,13 @@ export class Sky {
     const req = Math.min(DETAIL_FOV * 1.9, cover);
     if (this.cur) {
       const sep = angSep(ra, dec, this.cur.ra, this.cur.dec);
-      if (sep < this.cur.fov * 0.22 && req > this.cur.fov / 2.4 && req < this.cur.fov * 1.5) return;
+      const zoomCovered = this.cur.native && req <= this.cur.fov;
+      if (sep < this.cur.fov * 0.22 && (zoomCovered || (req > this.cur.fov / 2.4 && req < this.cur.fov * 1.5))) return;
     }
     const key = `${ra.toFixed(3)},${dec.toFixed(3)},${req.toFixed(4)}`;
     if (this.pending === key) return;
     this.pending = key;
+    this._setSource('loading…');
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this._fetch(ra, dec, req, key), 320);
   }
@@ -166,11 +193,11 @@ export class Sky {
     const hit = this.cache.get(key);
     if (hit) {
       this.cache.delete(key); this.cache.set(key, hit);   // LRU touch
-      this._show(hit.tex, ra, dec, fov, hit.src, key);
+      this._show(hit.tex, ra, dec, hit.fov, hit.src, key, hit.native);
       return;
     }
-    // wide patches get more texels so the photograph stays sharper than the screen
-    const px = fov > 3 ? CUTOUT_PX * 1.5 : CUTOUT_PX;
+    // Wide desktop patches get more texels; phones prioritize memory and latency.
+    const px = fov > 3 && !LOW_POWER ? CUTOUT_PX * 1.5 : CUTOUT_PX;
     const got = await fetchCutout(ra, dec, fov, px);
     if (!got) { this.pending = null; this._setSource('imagery unavailable here'); return; }
 
@@ -181,7 +208,9 @@ export class Sky {
     tex.needsUpdate = true;
     URL.revokeObjectURL(got.url);
 
-    this.cache.set(key, { tex, src: got.source });
+    const actualFov = got.fov || fov;
+    const native = actualFov > fov * 1.05;
+    this.cache.set(key, { tex, src: got.source, fov: actualFov, native });
     while (this.cache.size > TEX_CACHE) {
       const k = this.cache.keys().next().value;
       const v = this.cache.get(k);
@@ -189,12 +218,12 @@ export class Sky {
       v.tex.dispose();
     }
     if (this.pending !== key) return;      // camera moved on
-    this._show(tex, ra, dec, fov, got.source, key);
+    this._show(tex, ra, dec, actualFov, got.source, key, native);
   }
 
-  _show(tex, ra, dec, fov, src, key) {
+  _show(tex, ra, dec, fov, src, key, native = false) {
     this.pending = null;
-    this.cur = { ra, dec, fov, key };
+    this.cur = { ra, dec, fov, key, native };
     this.quadMat.map = tex;
     this.quadMat.needsUpdate = true;
     this.quadMat.userData.on = true;

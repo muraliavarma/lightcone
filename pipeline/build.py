@@ -24,6 +24,7 @@ import stars
 import quasar_sky
 import sky_image
 import manifest as manifest_mod
+import validate as validate_mod
 from common import DATA_DIR, print_summary
 
 DESI_LAYER_TO_TRACER = {v[0]: k for k, v in desi_lss.TRACERS.items()}
@@ -31,11 +32,11 @@ DESI_LAYER_TO_TRACER = {v[0]: k for k, v in desi_lss.TRACERS.items()}
 ALL_LAYERS = ["web_bgs", "web_lrg", "web_elg", "qso_desi", "local", "stars", "qso_sky"]
 
 
-def build_one(name: str) -> dict | None:
+def build_one(name: str) -> dict | list[dict] | None:
     if name in DESI_LAYER_TO_TRACER:
         return desi_lss.build_layer(DESI_LAYER_TO_TRACER[name])
     if name == "local":
-        return local_layer.build_layer()
+        return local_layer.build_layers()
     if name == "stars":
         return stars.build_layer()
     if name == "qso_sky":
@@ -63,11 +64,17 @@ def main():
         print(f"\ndone in {time.time()-t0:.1f}s")
         return
 
-    # --all
+    # --all — generated filenames evolve with the data contract; do not deploy
+    # stale binary layers left by an older build.
+    for old in DATA_DIR.glob("*.bin"):
+        old.unlink()
+
     layer_results = []
     for name in ALL_LAYERS:
         res = build_one(name)
-        if res is not None:
+        if isinstance(res, list):
+            layer_results.extend(res)
+        elif res is not None:
             layer_results.append(res)
 
     sky_image.build()
@@ -81,7 +88,9 @@ def main():
     print_summary(summary_rows)
 
     total_bytes = sum(f.stat().st_size for f in DATA_DIR.iterdir() if f.is_file())
-    print(f"\napp/data/ total size: {total_bytes/1e6:.2f} MB")
+    checked = validate_mod.validate()
+    print(f"\nvalidated: {checked['full']:,} full / {checked['lite']:,} lite points")
+    print(f"app/data/ total size: {total_bytes/1e6:.2f} MB")
     print(f"manifest: {manifest_path}")
     print(f"done in {time.time()-t0:.1f}s")
 

@@ -10,7 +10,7 @@ from astropy.io import fits
 
 from common import (
     CACHE_DIR, DATA_DIR, COSMO, BYTES_PER_ROW_DESI,
-    download, radec_to_xyz, write_desi_shell, n_shells_for, subsample_idx,
+    download, radec_to_xyz, write_desi_shell, n_shells_for, subsample_idx, lod_idx,
 )
 
 BASE_URL = "https://data.desi.lbl.gov/public/dr1/survey/catalogs/dr1/LSS/iron/LSScats/v1.5"
@@ -22,6 +22,14 @@ TRACERS = {
     "LRG": ("web_lrg", 400_000),
     "ELG_LOPnotqso": ("web_elg", 600_000),
     "QSO": ("qso_desi", 400_000),
+}
+
+# Mobile LOD: preserve every tracer and every radial shell, at ~30% density.
+LITE_TARGETS = {
+    "web_bgs": 150_000,
+    "web_lrg": 120_000,
+    "web_elg": 180_000,
+    "qso_desi": 120_000,
 }
 
 
@@ -79,7 +87,7 @@ def build_layer(tracer: str) -> dict:
 
     # shell-split ordered by distance (near shells first)
     order = np.argsort(d_c)
-    xyz, z, targetid = xyz[order], z[order], targetid[order]
+    xyz, z, targetid, d_c = xyz[order], z[order], targetid[order], d_c[order]
 
     n_shells = n_shells_for(n_out, BYTES_PER_ROW_DESI)
     shell_bounds = np.array_split(np.arange(n_out), n_shells)
@@ -93,7 +101,18 @@ def build_layer(tracer: str) -> dict:
         fpath = DATA_DIR / fname
         nbytes = write_desi_shell(fpath, xyz[sel], z[sel], targetid[sel])
         total_bytes += nbytes
-        files.append({"path": fname, "count": int(len(sel)), "arrays": ["xyz", "z", "targetid"]})
+
+        lite_n = max(1, round(len(sel) * LITE_TARGETS[layer_name] / n_out))
+        li = lod_idx(len(sel), lite_n)
+        lsel = sel[li]
+        lite_name = f"{layer_name}_lite_shell{i:02d}.bin"
+        lite_bytes = write_desi_shell(DATA_DIR / lite_name, xyz[lsel], z[lsel], targetid[lsel])
+        total_bytes += lite_bytes
+        files.append({
+            "path": fname, "count": int(len(sel)), "arrays": ["xyz", "z", "targetid"],
+            "dmin": float(d_c[sel[0]]), "dmax": float(d_c[sel[-1]]),
+            "lite": {"path": lite_name, "count": int(len(lsel))},
+        })
 
     print(f"  rows_in={n_in:,} valid={n_valid:,} rows_out={n_out:,} shells={len(files)} bytes={total_bytes:,}")
     return {

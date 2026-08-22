@@ -1,5 +1,5 @@
 // HUD (§6.6). Near-monochrome, mono readouts, brass only where you can act.
-import { STAGE, GROUPS } from './config.js';
+import { STAGE, GROUPS, QUALITY } from './config.js';
 import { fmtRa, fmtDec, zOfDc, MPC_TO_MLY } from './cosmo.js';
 
 export class Hud {
@@ -15,9 +15,15 @@ export class Hud {
     this.mDepth = document.getElementById('mDepth');
     this.btnFree = document.getElementById('btnFree');
     this.boot = document.getElementById('boot');
+    this.chipEpoch = document.getElementById('chipEpoch');
+    this.epochControl = document.getElementById('epochControl');
+    this.epochRange = document.getElementById('epochRange');
+    this.epochOut = document.getElementById('epochOut');
 
     this.off = new Set();
     this.photo = true;
+    this.lens = false;
+    this.lookback = Number(this.epochRange.value) / 1000;
     this._frames = 0; this._t0 = performance.now(); this._fps = 0;
     this._lastRO = '';
 
@@ -43,7 +49,27 @@ export class Hud {
     this.mDepth.addEventListener('click', () => { this.h.onMode(1); this.dismissHint(); });
     document.getElementById('btnHome').addEventListener('click', () => { this.h.onHome(); this.dismissHint(); });
     this.btnFree.addEventListener('click', () => this.h.onFree());
+    this.chipEpoch.addEventListener('click', () => {
+      this.setLensState(!this.lens, this.lookback);
+      this.h.onLens(this.lens, this.lookback);
+      this.dismissHint();
+    });
+    this.epochRange.addEventListener('input', () => {
+      this.lookback = Number(this.epochRange.value) / 1000;
+      this._setEpochText();
+      this.h.onLens(true, this.lookback);
+    });
+    document.getElementById('epochClose').addEventListener('click', () => {
+      this.setLensState(false, this.lookback);
+      this.h.onLens(false, this.lookback);
+    });
 
+    if (innerWidth <= 820 || matchMedia('(pointer: coarse)').matches) {
+      this.hint.innerHTML = 'drag to look around · pinch to zoom · tap <b>Depth · 3D</b> to unfold the sky';
+    }
+    this.rPoints.parentElement.title = QUALITY === 'lite'
+      ? 'Mobile-optimized view; add ?quality=full to load all points' : 'Full-resolution catalog view';
+    this._setEpochText();
     this._hintTimer = setTimeout(() => this.dismissHint(), 11000);
   }
 
@@ -62,6 +88,25 @@ export class Hud {
 
   get offGroups() { return [...this.off]; }
 
+  setLensState(on, lookback = this.lookback) {
+    this.lens = !!on;
+    this.lookback = Math.max(0, Math.min(12.8, Number(lookback) || 0));
+    this.epochRange.value = String(Math.round(this.lookback * 1000));
+    this.chipEpoch.setAttribute('aria-pressed', String(this.lens));
+    this.chipEpoch.setAttribute('aria-expanded', String(this.lens));
+    this.epochControl.hidden = !this.lens;
+    this._setEpochText();
+  }
+
+  _setEpochText() {
+    const t = this.lookback;
+    const text = t < 1
+      ? `${Math.round(t * 1000)} Myr ago · ±450 Myr`
+      : `${t.toFixed(t < 10 ? 2 : 1)} Gyr ago · ±0.45`;
+    this.epochOut.textContent = text;
+    this.epochRange.setAttribute('aria-valuetext', text);
+  }
+
   dismissHint() {
     clearTimeout(this._hintTimer);
     if (this.hint && !this.hint.classList.contains('gone')) this.hint.classList.add('gone');
@@ -77,6 +122,8 @@ export class Hud {
     const photo = stage === STAGE.PHOTO && u < 0.5;
     this.mPhoto.classList.toggle('on', photo);
     this.mDepth.classList.toggle('on', !photo);
+    this.mPhoto.setAttribute('aria-pressed', String(photo));
+    this.mDepth.setAttribute('aria-pressed', String(!photo));
     this.btnFree.classList.toggle('hidden', stage !== STAGE.ANCHORED);
   }
 

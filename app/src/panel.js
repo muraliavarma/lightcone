@@ -8,7 +8,7 @@ import {
   SPARCL, VIEWER, LAYERS, HAS_SPECTRUM, LINES_GAL_EM, LINES_GAL_ABS, LINES_QSO
 } from './config.js';
 import { fetchCutout } from './cutout.js';
-import { dcOfZ, tlbOfZ, lookbackPhrase, fmtRa, fmtDec, MPC_TO_MLY, czOfZ } from './cosmo.js';
+import { dcOfZ, tlbOfZ, zOfDc, lookbackPhrase, fmtRa, fmtDec, MPC_TO_MLY, czOfZ } from './cosmo.js';
 
 const NSPEC = 7781;                     // grid is exactly 3600.0 + 0.8*i (§2)
 const L0 = 3600.0, DL = 0.8;
@@ -18,6 +18,7 @@ const tok = (n, f) => (CSS.getPropertyValue(n) || f).trim() || f;
 export class Panel {
   constructor(el) {
     this.el = el;
+    this.el.inert = true;
     this.el.innerHTML = `
       <button class="pClose" aria-label="Close">×</button>
       <div class="pPhoto"><img alt="" decoding="async"><i class="pCross"></i><span class="pNote"></span></div>
@@ -29,8 +30,12 @@ export class Panel {
         <div class="pSpecHead"><span>spectrum</span><span class="pSpecSrc"></span></div>
         <canvas class="pCanvas" width="600" height="340"></canvas>
         <div class="pSpecMsg"></div>
+        <p class="pSpecWhy">The labeled fingerprints arrive stretched by ×(1 + z). That shift is what gives this point its depth.</p>
       </div>
-      <a class="pLink" target="_blank" rel="noopener">open in Legacy Surveys viewer ↗</a>`;
+      <div class="pActions">
+        <button class="pLocate">locate on the photographed sky</button>
+        <a class="pLink" target="_blank" rel="noopener">official survey viewer ↗</a>
+      </div>`;
     this.img = el.querySelector('.pPhoto img');
     this.cross = el.querySelector('.pCross');
     this.note = el.querySelector('.pNote');
@@ -41,17 +46,22 @@ export class Panel {
     this.canvas = el.querySelector('.pCanvas');
     this.specMsg = el.querySelector('.pSpecMsg');
     this.specSrc = el.querySelector('.pSpecSrc');
+    this.specWhy = el.querySelector('.pSpecWhy');
     this.specBox = el.querySelector('.pSpec');
     this.link = el.querySelector('.pLink');
+    this.locate = el.querySelector('.pLocate');
     el.querySelector('.pClose').addEventListener('click', () => this.close());
+    this.locate.addEventListener('click', () => { if (this.onLocate && this.sel) this.onLocate(this.sel); });
     this.token = 0;
     this.onClose = null;
+    this.onLocate = null;
   }
 
   close() {
     this.token++;
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
+    this.el.inert = true;
     if (this.onClose) this.onClose();
   }
 
@@ -63,33 +73,51 @@ export class Panel {
     this.sel = sel;
     this.el.classList.add('open');
     this.el.setAttribute('aria-hidden', 'false');
+    this.el.inert = false;
 
     const L = LAYERS[sel.layer] || {};
     const isQso = L.group === 'qso';
     this.title.textContent = sel.tidStr ? `DESI ${sel.tidStr}` : L.label || 'Object';
-    this.cls.textContent = sel.layer === 'local'
-      ? 'Cosmicflows-4 / 2MRS · measured distance'
-      : `${L.label || sel.layer} · DESI DR1`;
+    if (sel.layer === 'local_cf4') {
+      this.cls.textContent = 'Cosmicflows-4 · redshift-independent distance';
+    } else if (sel.layer === 'local_2mrs') {
+      this.cls.textContent = '2MRS · CMB-frame redshift distance';
+    } else if (sel.layer === 'qso_sky') {
+      this.cls.textContent = 'Milliquas v8 · spectroscopic redshift';
+    } else {
+      this.cls.textContent = `${L.label || sel.layer} · DESI DR1`;
+    }
     this.cross.style.display = isQso ? 'block' : 'none';
 
-    const dc = dcOfZ(sel.z);
-    const tlb = tlbOfZ(sel.z);
+    // The rendered radius is the authoritative map distance. This is essential
+    // for Cosmicflows-4, whose whole purpose is to differ from cz/H0 where
+    // peculiar velocity is important.
+    const dc = Number.isFinite(sel.distance) ? sel.distance : dcOfZ(sel.z);
+    const tlb = tlbOfZ(zOfDc(dc));
     const rows = [
       ['redshift z', sel.z.toFixed(5)],
-      ['comoving D', `${fmtNum(dc)} Mpc`],
+      [sel.layer === 'local_cf4' ? 'direct D' : 'comoving D', `${fmtNum(dc)} Mpc`],
       ['', `${fmtNum(dc * MPC_TO_MLY)} Mly`],
       ['lookback', `${tlb.toFixed(3)} Gyr`],
       ['RA', `${fmtRa(sel.ra)}  (${sel.ra.toFixed(4)}°)`],
       ['Dec', `${fmtDec(sel.dec)}  (${sel.dec.toFixed(4)}°)`]
     ];
-    if (sel.layer === 'local') rows.push(['recession', `${Math.round(czOfZ(sel.z))} km/s`]);
+    if (sel.layer === 'local_cf4' || sel.layer === 'local_2mrs') {
+      rows.push(['CMB velocity', `${Math.round(czOfZ(sel.z)).toLocaleString()} km/s`]);
+    }
     this.nums.innerHTML = rows.map(([k, v]) =>
       `<dt>${k}</dt><dd>${v}</dd>`).join('');
 
     const thing = isQso ? 'quasar' : 'galaxy';
-    this.plain.textContent = sel.layer === 'local'
-      ? `Distance measured directly (Cosmicflows-4 / 2MRS). Light left this ${thing} about ${lookbackPhrase(tlb)} ago.`
-      : `Light left this ${thing} ${lookbackPhrase(tlb)} ago.`;
+    if (sel.layer === 'local_cf4') {
+      this.plain.textContent = `Its distance comes from a redshift-independent indicator in Cosmicflows-4. Local motion can make the redshift disagree. Light left about ${lookbackPhrase(tlb)} ago.`;
+    } else if (sel.layer === 'local_2mrs') {
+      this.plain.textContent = `Its distance is estimated from a CMB-corrected 2MRS redshift using Hubble's law. Light left about ${lookbackPhrase(tlb)} ago.`;
+    } else if (sel.layer === 'qso_sky') {
+      this.plain.textContent = `A spectroscopically confirmed quasar catalogued by Milliquas. Light left it ${lookbackPhrase(tlb)} ago; no DESI spectrum is linked to this entry.`;
+    } else {
+      this.plain.textContent = `Light left this ${thing} ${lookbackPhrase(tlb)} ago.`;
+    }
 
     this.link.href = `${VIEWER}?ra=${sel.ra.toFixed(6)}&dec=${sel.dec.toFixed(6)}&layer=ls-dr11&zoom=13`;
 
@@ -124,6 +152,7 @@ export class Panel {
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.specMsg.textContent = 'asking SPARCL for the spectrum…';
     this.specSrc.textContent = '';
+    this.specWhy.hidden = true;
     try {
       // targetid → sparcl_id. Body built by hand so the int64 never becomes a Number.
       const findBody = '{"outfields":["sparcl_id"],"search":[["data_release","DESI-DR1"],["specid","'
@@ -149,6 +178,7 @@ export class Panel {
 
       this.specMsg.textContent = '';
       this.specSrc.textContent = 'DESI DR1 · SPARCL · 10⁻¹⁷ erg s⁻¹ cm⁻² Å⁻¹';
+      this.specWhy.hidden = false;
       this._draw(spec.flux, spec.model, sel.z, isQso);
     } catch (err) {
       if (me !== this.token) return;

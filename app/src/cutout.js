@@ -50,12 +50,16 @@ function decode(blob) {
   });
 }
 
-async function get(url) {
+async function get(url, timeoutMs = 12000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: ctrl.signal });
     return r.ok ? await r.blob() : null;
   } catch (e) {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -66,22 +70,25 @@ async function get(url) {
  *          `url` is an object URL the caller owns and must revoke.
  */
 export async function fetchCutout(ra, dec, fov, px) {
-  const pixscale = (fov * 3600) / px;
+  // DECam's native sampling is 0.262″/px. Asking the server for smaller pixels
+  // manufactures no detail, so stop there and let the camera enlarge real pixels.
+  const pixscale = Math.max(0.262, (fov * 3600) / px);
+  const actualFov = pixscale * px / 3600;
   const blob = await get(
     `${CUTOUT}?ra=${ra.toFixed(6)}&dec=${dec.toFixed(6)}&layer=ls-dr11` +
     `&pixscale=${pixscale.toFixed(4)}&size=${Math.round(px)}`);
 
   if (blob && blob.size >= BLANK_BYTES) {
     const got = await decode(blob);
-    if (got && !pixelsAreBlank(got.img)) return { ...got, source: SRC_DR11 };
+    if (got && !pixelsAreBlank(got.img)) return { ...got, source: SRC_DR11, fov: actualFov };
     if (got) URL.revokeObjectURL(got.url);
   }
 
   const dss = await get(
     `${HIPS2FITS}?hips=CDS%2FP%2FDSS2%2Fcolor&ra=${ra.toFixed(6)}&dec=${dec.toFixed(6)}` +
-    `&fov=${fov.toFixed(6)}&width=${Math.round(px)}&height=${Math.round(px)}` +
-    `&projection=TAN&format=jpg`);
+    `&fov=${actualFov.toFixed(6)}&width=${Math.round(px)}&height=${Math.round(px)}` +
+    `&projection=TAN&format=jpg`, 16000);
   if (!dss || dss.size < 800) return null;
   const got = await decode(dss);
-  return got ? { ...got, source: SRC_DSS2 } : null;
+  return got ? { ...got, source: SRC_DSS2, fov: actualFov } : null;
 }

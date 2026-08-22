@@ -121,6 +121,18 @@ export class CameraRig {
     this._emit();
   }
 
+  /** Return to the telescope view centred on a specific measured object. */
+  showSky(ra, dec, fov = 0.35) {
+    this.stage = STAGE.PHOTO;
+    this.released = false;
+    this.fovPhoto = clamp(fov, FOV_MIN, FOV_MAX);
+    this.goTo({
+      ra, dec, fov: this.fovPhoto, u: 0, dist: 0,
+      oyaw: 0, opitch: 0, fx: 0, fy: 0, fz: 0
+    }, UNFOLD_MS);
+    this._emit();
+  }
+
   focusOn(v, dist) {
     this.release();
     const d = dist != null ? dist : Math.max(8, Math.min(900, v.length() * 0.22));

@@ -1,8 +1,11 @@
 # Lightcone
 
-Look at the real sky, toggle it into 3D, and fly through ~2.5M real DESI
+**Live: https://lightcone.muraliavarma.workers.dev**
+
+Look at the real sky, toggle it into 3D, and fly through ~2.8M real DESI
 redshifts — every dot is a measured galaxy, quasar, or star. Click any dot
-to see its actual photograph and its actual spectrum.
+to see its actual photograph and its actual spectrum. Press **tour** for a
+five-stop guided flight, **Depth · 3D** to unfold the sky you're looking at.
 
 No accounts, tracking, or simulated data — everything shown is a real
 measurement, or the app says so.

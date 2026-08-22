@@ -192,15 +192,47 @@ export class CameraRig {
 
   _bind() {
     const el = this.canvas;
+    this._pts = new Map();       // active pointers — two of them means a pinch
+    this._pinch = null;
+    this._lastTap = null;
+
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       el.setPointerCapture(e.pointerId);
+      this._pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this._pts.size === 2) {
+        // pinch = the touch wheel: zoom FOV in photo mode, dolly in 3D
+        const [a, b] = [...this._pts.values()];
+        this._pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+                        fov0: this.st.fov, dist0: this.st.dist };
+        this._drag = null;
+        this.tw = null;
+        return;
+      }
       this._drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: 0 };
       this._satur = 0;
       this.tw = null;
     });
 
     el.addEventListener('pointermove', (e) => {
+      const p = this._pts.get(e.pointerId);
+      if (p) { p.x = e.clientX; p.y = e.clientY; }
+      if (this._pinch && this._pts.size >= 2) {
+        const [a, b] = [...this._pts.values()];
+        const r = this._pinch.d0 / (Math.hypot(a.x - b.x, a.y - b.y) || 1);
+        const s = this.st;
+        if (this.stage === STAGE.PHOTO && s.u < 0.5) {
+          s.fov = clamp(this._pinch.fov0 * r, FOV_MIN, FOV_MAX);
+          this.fovPhoto = s.fov;
+        } else {
+          const lo = this.released ? 0.05 : DEPTH_BACK * 0.06;
+          const hi = this.released ? 30000 : DEPTH_BACK * 26;
+          s.dist = clamp(this._pinch.dist0 * r, lo, hi);
+        }
+        this.dirty = true;
+        this._emit();
+        return;
+      }
       const d = this._drag;
       if (!d) return;
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
@@ -235,13 +267,30 @@ export class CameraRig {
     });
 
     const end = (e) => {
+      this._pts.delete(e.pointerId);
+      if (this._pts.size < 2) this._pinch = null;
       const d = this._drag;
       this._drag = null;
       this._satur = 0;
-      if (d && d.moved < 4 && this.onClick) this.onClick(e);
+      if (!d || d.moved >= 4) return;
+      // iOS never synthesizes dblclick from touch — detect the double-tap here
+      if (e.pointerType === 'touch') {
+        const t = performance.now(), lt = this._lastTap;
+        if (lt && t - lt.t < 320 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 40) {
+          this._lastTap = null;
+          if (this.onDoubleClick) this.onDoubleClick(e);
+          return;
+        }
+        this._lastTap = { t, x: e.clientX, y: e.clientY };
+      }
+      if (this.onClick) this.onClick(e);
     };
     el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', () => { this._drag = null; });
+    el.addEventListener('pointercancel', (e) => {
+      this._pts.delete(e.pointerId);
+      if (this._pts.size < 2) this._pinch = null;
+      this._drag = null;
+    });
 
     el.addEventListener('dblclick', (e) => { if (this.onDoubleClick) this.onDoubleClick(e); });
 

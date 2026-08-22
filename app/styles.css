@@ -206,4 +206,10 @@ html.reduced *, html.reduced *::before, html.reduced *::after {
   .tl h1 { font-size: 21px; }
   .tr { max-width: 70vw; }
   .credit { display: none; }
+  /* one thing per corner: the phone's bottom edge belongs to the mode bar */
+  .br { display: none; }
+  .bl { bottom: calc(var(--pad) + 46px); }
+  .hint { bottom: 118px; font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
+  .bc { max-width: 96vw; flex-wrap: wrap; justify-content: center; }
+  .pCanvas { height: 150px; }
 }
